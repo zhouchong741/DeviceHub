@@ -311,6 +311,12 @@ export class DeviceSession extends EventEmitter {
   setDisplayPower(on: boolean): void {
     if (this.status !== 'running') return
     this.displayPower = on
+    if (on) {
+      // 面板关闭期间设备可能已被系统息屏/锁屏（Dozing/Asleep），仅恢复面板无法唤醒，
+      // 需额外注入 KEYCODE_WAKEUP(224)；该键只唤醒、不会像 POWER 键那样来回切换
+      this.writeControl(encodeInjectKeycode(KEY_ACTION_DOWN, 224))
+      this.writeControl(encodeInjectKeycode(KEY_ACTION_UP, 224))
+    }
     this.writeControl(encodeSetDisplayPower(on))
     this.emitState()
   }
