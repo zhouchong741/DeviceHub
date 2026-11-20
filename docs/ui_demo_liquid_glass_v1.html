@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      const savedScheme = localStorage.getItem("droidwall-color-scheme");
+      document.querySelector('meta[name="color-scheme"]').content =
+        savedScheme === "light" || savedScheme === "dark" ? savedScheme : "light dark";
+    } catch {
+      /* 忽略受限环境下的存储访问异常 */
+    }
+  </script>
+  <title>DroidWall — macOS Liquid Glass 高保真交互原型</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+
+      /* 系统语义强调色 */
+      --accent-blue: light-dark(#007aff, #0a84ff);
+      --accent-blue-soft: light-dark(rgba(0, 122, 255, 0.14), rgba(10, 132, 255, 0.22));
+      --accent-green: light-dark(#248a3d, #30d158);
+      --accent-amber: light-dark(#b25000, #ff9f0a);
+      --accent-red: light-dark(#d70015, #ff453a);
+
+      /* 舞台桌面极光背景（非内容区，用于展示玻璃透光感） */
+      --desktop-bg: light-dark(
+        radial-gradient(1200px 800px at 14% 12%, #d8ebff 0%, transparent 55%),
+        radial-gradient(1200px 800px at 14% 12%, #112445 0%, transparent 55%)
+      ),
+      light-dark(
+        radial-gradient(900px 700px at 88% 18%, #e4dcff 0%, transparent 52%),
+        radial-gradient(900px 700px at 88% 18%, #1e183b 0%, transparent 52%)
+      ),
+      light-dark(
+        radial-gradient(900px 700px at 55% 92%, #d5f2ea 0%, transparent 54%),
+        radial-gradient(900px 700px at 55% 92%, #0c262b 0%, transparent 54%)
+      ),
+      light-dark(#e8eef6, #07090d);
+
+      /* 窗口外框与内容层（Content Layer 保持实体克制，不使用重玻璃） */
+      --window-bg: light-dark(rgba(246, 248, 251, 0.88), rgba(20, 22, 27, 0.88));
+      --window-stroke: light-dark(rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.11));
+      --content-surface: light-dark(#f2f4f8, #121419);
+      --content-divider: light-dark(rgba(15, 23, 42, 0.08), rgba(255, 255, 255, 0.08));
+
+      /* 文本层级 (Vibrancy) */
+      --text-primary: light-dark(rgba(15, 23, 42, 0.92), rgba(255, 255, 255, 0.92));
+      --text-secondary: light-dark(rgba(15, 23, 42, 0.62), rgba(235, 235, 245, 0.62));
+      --text-tertiary: light-dark(rgba(15, 23, 42, 0.42), rgba(235, 235, 245, 0.38));
+
+      /* 悬浮液态玻璃材质 (Navigation & Control Layer Only) */
+      --glass-sidebar: light-dark(rgba(255, 255, 255, 0.62), rgba(34, 37, 46, 0.58));
+      --glass-capsule: light-dark(rgba(255, 255, 255, 0.68), rgba(38, 41, 50, 0.64));
+      --glass-hud: light-dark(rgba(255, 255, 255, 0.78), rgba(30, 33, 42, 0.76));
+      --glass-rim: light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.17));
+      --glass-border: light-dark(rgba(15, 23, 42, 0.10), rgba(255, 255, 255, 0.12));
+      --glass-tint-hover: light-dark(rgba(15, 23, 42, 0.06), rgba(255, 255, 255, 0.09));
+      --glass-tint-active: light-dark(rgba(0, 122, 255, 0.14), rgba(10, 132, 255, 0.24));
+
+      /* 设备机身卡片（实体硬件质感） */
+      --device-shell: light-dark(#ffffff, #1b1e25);
+      --device-shell-border: light-dark(rgba(15, 23, 42, 0.11), rgba(255, 255, 255, 0.10));
+      --device-header-bg: light-dark(rgba(248, 250, 252, 0.85), rgba(26, 29, 36, 0.88));
+      --device-well: light-dark(#e9edf3, #090b0f);
+
+      /* 滚动条令牌 */
+      --sb-thumb: light-dark(rgba(60, 60, 67, 0.36), rgba(235, 235, 245, 0.34));
+      --sb-track: transparent;
+    }
+
+    :root:has(> head > meta[name="color-scheme"][content="dark"]) {
+      color-scheme: dark;
+    }
+    :root:has(> head > meta[name="color-scheme"][content="light"]) {
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+      color: var(--text-primary);
+      background: var(--desktop-bg);
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+
+    .mono-num {
+      font-family: "SF Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* macOS 主窗口同心圆角：外圆角 26px */
+    .mac-window {
+      border-radius: 26px;
+      background: var(--window-bg);
+      border: 1px solid var(--glass-border);
+      box-shadow:
+        inset 0 1px 0 var(--window-stroke),
+        0 32px 80px -18px rgba(0, 0, 0, 0.48),
+        0 6px 20px -4px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(24px) saturate(140%);
+      -webkit-backdrop-filter: blur(24px) saturate(140%);
+    }
+
+    /* 悬浮侧边栏：12px inset，16px 同心圆角 */
+    .liquid-sidebar {
+      border-radius: 16px;
+      background: var(--glass-sidebar);
+      border: 1px solid var(--glass-border);
+      box-shadow:
+        inset 0 1px 0 var(--glass-rim),
+        0 12px 32px -8px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(36px) saturate(185%);
+      -webkit-backdrop-filter: blur(36px) saturate(185%);
+    }
+
+    /* 悬浮液态玻璃胶囊（仅用于顶栏工具组与底栏 HUD） */
+    .liquid-capsule {
+      border-radius: 9999px;
+      background: var(--glass-capsule);
+      border: 1px solid var(--glass-border);
+      box-shadow:
+        inset 0 1px 0 var(--glass-rim),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+        0 8px 24px -6px rgba(0, 0, 0, 0.18);
+      backdrop-filter: blur(28px) saturate(185%);
+      -webkit-backdrop-filter: blur(28px) saturate(185%);
+    }
+
+    .liquid-hud {
+      border-radius: 9999px;
+      background: var(--glass-hud);
+      border: 1px solid var(--glass-border);
+      box-shadow:
+        inset 0 1px 0 var(--glass-rim),
+        0 14px 36px -8px rgba(0, 0, 0, 0.26);
+      backdrop-filter: blur(30px) saturate(190%);
+      -webkit-backdrop-filter: blur(30px) saturate(190%);
+    }
+
+    /* 工具栏按钮基线规则：min-inline-size/min-block-size >= 28px，焦点环，ARIA 激活态 */
+    .tb-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-inline-size: 28px;
+      min-block-size: 28px;
+      padding: 0 10px;
+      border-radius: 9999px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .tb-btn-icon {
+      padding: 0 7px;
+    }
+
+    .tb-btn:focus-visible,
+    .nav-btn:focus-visible,
+    .sidebar-item:focus-visible {
+      outline: 2px solid var(--accent-blue);
+      outline-offset: 2px;
+    }
+
+    .tb-btn[aria-pressed="true"] {
+      background: var(--glass-tint-active);
+      color: var(--accent-blue);
+      border-color: light-dark(rgba(0, 122, 255, 0.24), rgba(10, 132, 255, 0.34));
+    }
+
+    .tb-btn.tb-primary[aria-pressed="true"] {
+      background: var(--accent-blue);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.25);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    }
+
+    .tb-btn[aria-disabled="true"] {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
+
+    .tb-sep {
+      display: inline-block;
+      width: 1px;
+      height: 16px;
+      margin: 0 3px;
+      background: var(--glass-border);
+      flex-shrink: 0;
+    }
+
+    @media (hover: hover) {
+      .tb-btn:not([aria-disabled="true"]):hover {
+        background: var(--glass-tint-hover);
+        color: var(--text-primary);
+      }
+      .tb-btn.tb-primary[aria-pressed="true"]:hover {
+        filter: brightness(1.06);
+        color: #ffffff;
+      }
+      .sidebar-item:hover {
+        background: var(--glass-tint-hover);
+      }
+      .device-card:hover {
+        border-color: light-dark(rgba(0, 122, 255, 0.32), rgba(10, 132, 255, 0.38));
+      }
+      .nav-btn:hover {
+        background: var(--glass-tint-hover);
+        color: var(--text-primary);
+      }
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .tb-btn,
+      .sidebar-item,
+      .device-card,
+      .liquid-sidebar,
+      .nav-btn {
+        transition:
+          background-color 160ms ease,
+          border-color 160ms ease,
+          color 160ms ease,
+          opacity 160ms ease,
+          transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          box-shadow 180ms ease;
+      }
+    }
+
+    /* 设备外框严格同心：外 24px，内垫 6px，内画布 18px */
+    .device-card {
+      border-radius: 24px;
+      background: var(--device-shell);
+      border: 1px solid var(--device-shell-border);
+      box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.22);
+    }
+
+    .device-card.is-master {
+      border: 1.5px solid var(--accent-blue);
+      box-shadow:
+        0 0 0 3px var(--accent-blue-soft),
+        0 14px 34px -10px rgba(0, 122, 255, 0.24);
+    }
+
+    .device-card.is-slave {
+      border-color: light-dark(rgba(0, 122, 255, 0.42), rgba(10, 132, 255, 0.45));
+    }
+
+    .device-screen-canvas {
+      border-radius: 18px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    /* 滚动条标准配置与 WebKit 兼容回退 */
+    .glass-scroller {
+      scrollbar-width: thin;
+      scrollbar-color: var(--sb-thumb) var(--sb-track);
+    }
+
+    @supports not (scrollbar-color: auto) {
+      .glass-scroller {
+        scrollbar-width: auto;
+      }
+      .glass-scroller::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .glass-scroller::-webkit-scrollbar-thumb {
+        background: var(--sb-thumb);
+        border-radius: 9999px;
+      }
+      .glass-scroller::-webkit-scrollbar-track {
+        background: var(--sb-track);
+      }
+    }
+
+    /* 顶部 Scroll Edge Effect 羽化过渡 */
+    .scroll-edge-top {
+      background: linear-gradient(
+        to bottom,
+        var(--content-surface) 0%,
+        color-mix(in srgb, var(--content-surface) 82%, transparent) 55%,
+        transparent 100%
+      );
+    }
+
+    /* macOS 交通灯 */
+    .traffic-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 9999px;
+      border: 0.5px solid rgba(0, 0, 0, 0.14);
+      display: inline-block;
+    }
+
+    /* 仅辅助技术可见 */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  </style>
+</head>
+<body class="min-h-screen w-full flex items-center justify-center p-3 sm:p-5 overflow-hidden">
+
+  <!-- macOS Tahoe 应用窗口容器 -->
+  <div class="mac-window w-full max-w-[1440px] h-[calc(100vh-24px)] sm:h-[calc(100vh-40px)] min-h-[640px] flex relative overflow-hidden">
+
+    <!-- 背景基础内容表面 -->
+    <div class="absolute inset-0 bg-[var(--content-surface)] -z-10"></div>
+
+    <!-- 左侧悬浮侧边栏 (Floating Sidebar: 12px inset, 16px concentric radius) -->
+    <aside id="floating-sidebar"
+           aria-label="设备侧边栏"
+           class="liquid-sidebar w-[264px] shrink-0 m-3 mr-0 flex flex-col justify-between overflow-hidden z-20">
+
+      <!-- 侧栏顶部：交通灯 + 应用标识 + 折叠按钮 -->
+      <div class="px-3.5 pt-3.5 pb-2.5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="traffic-dot bg-[#ff5f57]"></span>
+            <span class="traffic-dot bg-[#febc2e]"></span>
+            <span class="traffic-dot bg-[#28c840]"></span>
+          </div>
+          <button type="button"
+                  onclick="toggleSidebar()"
+                  aria-label="收起侧边栏"
+                  title="收起侧边栏"
+                  class="nav-btn w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-secondary)]">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="4"></rect>
+              <path d="M9 3v18"></path>
+              <path d="M15 10l-2 2 2 2"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between px-1">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-[9px] bg-[var(--accent-blue)] text-white flex items-center justify-center shadow-sm">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="8" height="14" rx="2"></rect>
+                <rect x="13" y="6" width="8" height="14" rx="2"></rect>
+              </svg>
+            </div>
+            <div>
+              <div class="text-[13px] font-semibold tracking-tight leading-tight">DroidWall</div>
+              <div class="text-[11px] text-[var(--text-tertiary)] leading-tight">macOS 多机投屏工作台</div>
+            </div>
+          </div>
+          <span class="mono-num text-[11px] px-1.5 py-0.5 rounded-md bg-[var(--glass-tint-hover)] text-[var(--text-secondary)]">v0.1</span>
+        </div>
+      </div>
+
+      <!-- 侧栏中间：在线真机列表 -->
+      <div class="px-2.5 flex-1 overflow-y-auto glass-scroller space-y-2">
+        <div class="px-1.5 pt-1 flex items-center justify-between">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">USB 真机 (<span id="online-count" class="mono-num">4</span>)</span>
+          <button type="button"
+                  id="btn-select-all-slaves"
+                  onclick="selectAllSlaves()"
+                  class="hidden text-[11px] font-medium text-[var(--accent-blue)] hover:underline cursor-pointer">
+            全选受控
+          </button>
+        </div>
+
+        <div id="sidebar-device-list" class="space-y-1"></div>
+
+        <!-- 阶段 3-4 预览专属：极简拖拽分发区 -->
+        <div id="stage34-dropzone"
+             ondragover="handleDragOver(event)"
+             ondrop="handleGlobalDrop(event)"
+             onclick="triggerBatchDrop('apk')"
+             class="hidden mt-3 p-3 rounded-[12px] border border-dashed border-[var(--glass-border)] bg-[var(--glass-tint-hover)] hover:border-[var(--accent-blue)] cursor-pointer text-center space-y-1">
+          <div class="flex items-center justify-center gap-1.5 text-[12px] font-medium text-[var(--text-primary)]">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>拖拽 APK 或文件到此</span>
+          </div>
+          <div class="text-[11px] text-[var(--text-tertiary)] leading-snug">
+            批量安装或推送至勾选设备
+          </div>
+        </div>
+      </div>
+
+      <!-- 侧栏底部：本机 ADB 诊断胶囊 -->
+      <div class="p-3 border-t border-[var(--content-divider)]">
+        <div class="px-2.5 py-2 rounded-[10px] bg-[var(--glass-tint-hover)] flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-2 h-2 rounded-full bg-[var(--accent-green)] shrink-0"></span>
+            <div class="min-w-0">
+              <div class="text-[11px] font-medium truncate text-[var(--text-primary)]">本机 Android Studio ADB</div>
+              <div class="mono-num text-[10px] truncate text-[var(--text-tertiary)]">~/Library/Android/sdk · v37.0.0</div>
+            </div>
+          </div>
+          <button type="button"
+                  onclick="announce('ADB 服务已就绪：127.0.0.1:5037 (Version 37.0.0)')"
+                  title="刷新 ADB 状态"
+                  aria-label="刷新 ADB 状态"
+                  class="nav-btn w-6 h-6 rounded-md flex items-center justify-center text-[var(--text-secondary)] shrink-0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+              <polyline points="21 3 21 9 15 9"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧主内容工作区 (Content Layer) -->
+    <main class="flex-1 flex flex-col relative overflow-hidden">
+
+      <!-- 顶部悬浮液态玻璃胶囊工具栏 (Floating Capsule Toolbar + Scroll Edge Effect) -->
+      <header class="sticky top-0 z-20 px-4 pt-3 pb-4 scroll-edge-top pointer-events-none">
+        <div role="toolbar"
+             focusgroup="toolbar wrap"
+             aria-label="DroidWall 控制栏"
+             class="flex flex-wrap items-center justify-between gap-2.5 pointer-events-auto">
+
+          <!-- 左侧胶囊组：侧栏开关（收起时显示）+ 阶段视图切换 + 批量投屏 -->
+          <div class="liquid-capsule px-1.5 py-1 flex items-center gap-0.5" role="group" aria-label="视图与连接控制">
+            <button type="button"
+                    id="btn-expand-sidebar"
+                    onclick="toggleSidebar()"
+                    aria-label="展开侧边栏"
+                    title="展开侧边栏"
+                    class="tb-btn tb-btn-icon hidden">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="4"></rect>
+                <path d="M9 3v18"></path>
+                <path d="M13 10l2 2-2 2"></path>
+              </svg>
+            </button>
+            <span id="sep-expand-sidebar" role="separator" aria-orientation="vertical" class="tb-sep hidden"></span>
+
+            <!-- 阶段视图分段控制器 -->
+            <div role="group" aria-label="功能阶段视图" class="flex items-center gap-0.5">
+              <button type="button"
+                      id="mode-p12"
+                      aria-pressed="true"
+                      onclick="setFeatureStage('p12')"
+                      class="tb-btn tb-primary">
+                <span>阶段 1-2</span>
+              </button>
+              <button type="button"
+                      id="mode-p34"
+                      aria-pressed="false"
+                      onclick="setFeatureStage('p34')"
+                      class="tb-btn tb-primary">
+                <span>阶段 3-4 预览</span>
+              </button>
+            </div>
+
+            <span role="separator" aria-orientation="vertical" class="tb-sep"></span>
+
+            <button type="button"
+                    onclick="toggleAllMirror()"
+                    class="tb-btn"
+                    title="全部开始或暂停投屏">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polygon points="6 4 20 12 6 20 6 4"></polygon>
+              </svg>
+              <span id="label-mirror-all">暂停全部</span>
+            </button>
+
+            <!-- 阶段 3-4 预览专属群控控制组 -->
+            <div id="stage34-toolbar-group" role="group" aria-label="群控与批量分发" class="hidden items-center gap-0.5">
+              <span role="separator" aria-orientation="vertical" class="tb-sep"></span>
+              <button type="button"
+                      id="btn-group-sync"
+                      aria-pressed="true"
+                      onclick="toggleGroupSync()"
+                      class="tb-btn tb-primary"
+                      title="开启或关闭一控多群控同步">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="5" r="2.5"></circle>
+                  <circle cx="5" cy="18" r="2.5"></circle>
+                  <circle cx="19" cy="18" r="2.5"></circle>
+                  <path d="M10.8 7.2L6.2 15.8M13.2 7.2l4.6 8.6"></path>
+                </svg>
+                <span id="label-group-sync">群控同步 (1主→2从)</span>
+              </button>
+              <button type="button"
+                      onclick="triggerBatchDrop('apk')"
+                      class="tb-btn"
+                      title="模拟群发安装 APK">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+                <span>群发 APK</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 右侧胶囊组：画质切换 + 网格列数 + 深浅液态玻璃外观切换 -->
+          <div class="liquid-capsule px-1.5 py-1 flex items-center gap-0.5" role="group" aria-label="画质与显示布局">
+            <div role="group" aria-label="投屏画质" class="flex items-center gap-0.5">
+              <button type="button" id="q-540" aria-pressed="false" onclick="setQuality('540p')" class="tb-btn mono-num">540p</button>
+              <button type="button" id="q-720" aria-pressed="true" onclick="setQuality('720p')" class="tb-btn mono-num">720p</button>
+              <button type="button" id="q-1080" aria-pressed="false" onclick="setQuality('1080p')" class="tb-btn mono-num">1080p</button>
+            </div>
+
+            <span role="separator" aria-orientation="vertical" class="tb-sep"></span>
+
+            <div role="group" aria-label="网格列数" class="flex items-center gap-0.5">
+              <button type="button" id="col-2" aria-pressed="false" onclick="setGridCols(2)" class="tb-btn mono-num">2列</button>
+              <button type="button" id="col-3" aria-pressed="true" onclick="setGridCols(3)" class="tb-btn mono-num">3列</button>
+              <button type="button" id="col-4" aria-pressed="false" onclick="setGridCols(4)" class="tb-btn mono-num">4列</button>
+            </div>
+
+            <span role="separator" aria-orientation="vertical" class="tb-sep"></span>
+
+            <button type="button"
+                    id="btn-theme-toggle"
+                    onclick="toggleColorScheme()"
+                    aria-label="切换浅色或深色外观"
+                    title="切换浅色 / 深色液态玻璃外观"
+                    class="tb-btn tb-btn-icon">
+              <svg id="theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+              </svg>
+              <svg id="theme-icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="hidden" aria-hidden="true">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </button>
+          </div>
+
+        </div>
+      </header>
+
+      <!-- 设备墙滚动画布（Entity Content Layer：大面积留白 + 自动换行） -->
+      <section aria-label="真机多屏墙" class="flex-1 overflow-y-auto glass-scroller px-5 pb-20 pt-1">
+        <div id="device-wall" class="grid gap-5 items-start"></div>
+      </section>
+
+      <!-- 底部悬浮 HUD 提示胶囊 -->
+      <div class="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4 z-20">
+        <div class="liquid-hud px-3.5 py-1.5 flex items-center gap-3 max-w-2xl text-[12px] pointer-events-auto">
+          <span class="inline-flex items-center gap-1.5 shrink-0 font-medium text-[var(--accent-blue)]">
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-blue)]"></span>
+            <span id="hud-stage-tag">阶段 1-2 单机控屏</span>
+          </span>
+          <span class="w-px h-3.5 bg-[var(--glass-border)] shrink-0"></span>
+          <span id="hud-message" class="text-[var(--text-secondary)] truncate">
+            点击或拖动任意真机画面可实时模拟触控；首台已匹配本机 Xiaomi 2407FRK8EC (Android 16)。
+          </span>
+          <span id="hud-coords" class="mono-num text-[11px] text-[var(--text-tertiary)] shrink-0 hidden sm:inline">0.00, 0.00</span>
+        </div>
+      </div>
+
+      <!-- 辅助技术状态播报区（置于工具栏外） -->
+      <p id="a11y-status" role="status" class="sr-only"></p>
+    </main>
+  </div>
+
+  <script>
+    // 核心设备状态模型（首个设备真实映射本机已连接的 Xiaomi 2407FRK8EC）
+    const devices = [
+      {
+        serial: '8XL7JZFY8L4XAIBU',
+        name: 'Xiaomi K70 Ultra',
+        model: '2407FRK8EC',
+        os: 'Android 16 · API 36',
+        width: 1220,
+        height: 2712,
+        status: 'mirroring', // 'mirroring' | 'ready' | 'unauthorized'
+        role: 'master',
+        inGroup: true,
+        fps: 30,
+        bitrate: '1.5M',
+        page: 0, // 0: 桌面, 1: 调试应用, 2: 系统设置
+        screenOff: false,
+        rotated: false,
+        flash: false,
+        ripples: [],
+        transfer: null
+      },
+      {
+        serial: '38041FDH20049X',
+        name: 'Pixel 9 Pro',
+        model: 'Pixel 9 Pro',
+        os: 'Android 15 · API 35',
+        width: 1280,
+        height: 2856,
+        status: 'mirroring',
+        role: 'slave',
+        inGroup: true,
+        fps: 30,
+        bitrate: '1.5M',
+        page: 0,
+        screenOff: false,
+        rotated: false,
+        flash: false,
+        ripples: [],
+        transfer: null
+      },
+      {
+        serial: 'R5CW2198KLP',
+        name: 'Galaxy S25',
+        model: 'SM-S9310',
+        os: 'Android 15 · API 35',
+        width: 1080,
+        height: 2340,
+        status: 'mirroring',
+        role: 'slave',
+        inGroup: true,
+        fps: 30,
+        bitrate: '1.4M',
+        page: 0,
+        screenOff: false,
+        rotated: false,
+        flash: false,
+        ripples: [],
+        transfer: null
+      },
+      {
+        serial: 'OP13993A8B',
+        name: 'OnePlus 13',
+        model: 'PJZ110',
+        os: 'Android 15 · 未授权',
+        width: 1440,
+        height: 3168,
+        status: 'unauthorized',
+        role: 'idle',
+        inGroup: false,
+        fps: 0,
+        bitrate: '0M',
+        page: 0,
+        screenOff: false,
+        rotated: false,
+        flash: false,
+        ripples: [],
+        transfer: null
+      }
+    ];
+
+    let featureStage = 'p12'; // 'p12' | 'p34'
+    let groupSyncEnabled = true;
+    let sidebarCollapsed = false;
+    let gridCols = 3;
+    let focusedSerial = null;
+    let currentQuality = '720p';
+    let isPointerDown = false;
+    let activePointerSerial = null;
+    let lastTrailTime = 0;
+
+    // 读取当前实际渲染颜色方案（供 Canvas 渲染与双态切换使用）
+    function getResolvedScheme() {
+      const metaContent = document.querySelector('meta[name="color-scheme"]')?.content || 'light dark';
+      if (metaContent === 'dark') return 'dark';
+      if (metaContent === 'light') return 'light';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function updateThemeToggleIcon() {
+      const isDark = getResolvedScheme() === 'dark';
+      document.getElementById('theme-icon-sun').classList.toggle('hidden', !isDark);
+      document.getElementById('theme-icon-moon').classList.toggle('hidden', isDark);
+    }
+
+    // 遵守 dark-mode-toggle 两态覆盖逻辑：切到相反外观，若与系统默认一致则移除本地覆盖
+    function toggleColorScheme() {
+      const current = getResolvedScheme();
+      const target = current === 'dark' ? 'light' : 'dark';
+      const systemScheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      const meta = document.querySelector('meta[name="color-scheme"]');
+
+      if (target === systemScheme) {
+        try { localStorage.removeItem('droidwall-color-scheme'); } catch {}
+        meta.content = 'light dark';
+      } else {
+        try { localStorage.setItem('droidwall-color-scheme', target); } catch {}
+        meta.content = target;
+      }
+
+      updateThemeToggleIcon();
+      drawAllCanvases();
+      announce(target === 'dark' ? '已切换至深色液态玻璃外观' : '已切换至浅色液态玻璃外观');
+    }
+
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'droidwall-color-scheme') {
+        const meta = document.querySelector('meta[name="color-scheme"]');
+        meta.content = e.newValue === 'light' || e.newValue === 'dark' ? e.newValue : 'light dark';
+        updateThemeToggleIcon();
+        drawAllCanvases();
+      }
+    });
+
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      updateThemeToggleIcon();
+      drawAllCanvases();
+    });
+
+    function announce(msg) {
+      const hud = document.getElementById('hud-message');
+      const live = document.getElementById('a11y-status');
+      if (hud) hud.textContent = msg;
+      if (live) live.textContent = msg;
+    }
+
+    function toggleSidebar() {
+      sidebarCollapsed = !sidebarCollapsed;
+      const sidebar = document.getElementById('floating-sidebar');
+      const expandBtn = document.getElementById('btn-expand-sidebar');
+      const expandSep = document.getElementById('sep-expand-sidebar');
+
+      sidebar.classList.toggle('hidden', sidebarCollapsed);
+      expandBtn.classList.toggle('hidden', !sidebarCollapsed);
+      expandSep.classList.toggle('hidden', !sidebarCollapsed);
+      announce(sidebarCollapsed ? '已收起设备侧边栏' : '已展开设备侧边栏');
+    }
+
+    function setFeatureStage(stage) {
+      featureStage = stage;
+      const isP34 = stage === 'p34';
+
+      document.getElementById('mode-p12').setAttribute('aria-pressed', String(!isP34));
+      document.getElementById('mode-p34').setAttribute('aria-pressed', String(isP34));
+
+      const p34Toolbar = document.getElementById('stage34-toolbar-group');
+      p34Toolbar.classList.toggle('hidden', !isP34);
+      p34Toolbar.classList.toggle('flex', isP34);
+
+      document.getElementById('stage34-dropzone').classList.toggle('hidden', !isP34);
+      document.getElementById('btn-select-all-slaves').classList.toggle('hidden', !isP34);
+      document.getElementById('hud-stage-tag').textContent = isP34 ? '阶段 3-4 群控与分发预览' : '阶段 1-2 单机控屏';
+
+      renderAll();
+      announce(isP34
+        ? '已切换至阶段 3-4 预览：显示主从群控同步开关与全局文件拖拽安装区。'
+        : '已切换至阶段 1-2 视图：聚焦纯真机多屏实时投屏与单机独立操控。');
+    }
+
+    function toggleGroupSync() {
+      groupSyncEnabled = !groupSyncEnabled;
+      updateGroupSyncButton();
+      renderAll();
+      announce(groupSyncEnabled
+        ? '群控同步已开启：操作主控设备时将按归一化坐标同步到受控设备。'
+        : '群控同步已关闭：所有设备恢复单机独立操作。');
+    }
+
+    function updateGroupSyncButton() {
+      const btn = document.getElementById('btn-group-sync');
+      const label = document.getElementById('label-group-sync');
+      const slaveCount = devices.filter(d => d.role !== 'master' && d.inGroup && d.status !== 'unauthorized').length;
+      btn.setAttribute('aria-pressed', String(groupSyncEnabled));
+      label.textContent = groupSyncEnabled ? `群控同步 (1主→${slaveCount}从)` : '群控同步 (已暂停)';
+    }
+
+    function setQuality(q) {
+      currentQuality = q;
+      const cfgMap = {
+        '540p': { id: 'q-540', fps: 20, bitrate: '800K', text: '540p · 20fps 省流模式' },
+        '720p': { id: 'q-720', fps: 30, bitrate: '1.5M', text: '720p · 30fps 均衡模式' },
+        '1080p': { id: 'q-1080', fps: 60, bitrate: '4.0M', text: '1080p · 60fps 高清模式' }
+      };
+      ['540p', '720p', '1080p'].forEach(k => {
+        document.getElementById(cfgMap[k].id).setAttribute('aria-pressed', String(k === q));
+      });
+      const cfg = cfgMap[q];
+      devices.forEach(d => {
+        if (d.status === 'mirroring') {
+          d.fps = cfg.fps;
+          d.bitrate = cfg.bitrate;
+        }
+      });
+      renderWall();
+      announce(`全局投屏编码预设已切换为 ${cfg.text}`);
+    }
+
+    function setGridCols(cols) {
+      focusedSerial = null;
+      gridCols = cols;
+      [2, 3, 4].forEach(c => {
+        document.getElementById('col-' + c).setAttribute('aria-pressed', String(c === cols));
+      });
+      renderWall();
+      announce(`设备墙已切换为 ${cols} 列自适应布局`);
+    }
+
+    function toggleAllMirror() {
+      const hasMirroring = devices.some(d => d.status === 'mirroring');
+      const targetStatus = hasMirroring ? 'ready' : 'mirroring';
+      devices.forEach(d => {
+        if (d.status !== 'unauthorized') {
+          d.status = targetStatus;
+          if (targetStatus === 'mirroring') {
+            d.fps = currentQuality === '1080p' ? 60 : currentQuality === '540p' ? 20 : 30;
+            d.bitrate = currentQuality === '1080p' ? '4.0M' : currentQuality === '540p' ? '800K' : '1.5M';
+          } else {
+            d.fps = 0;
+            d.bitrate = '0M';
+          }
+        }
+      });
+      document.getElementById('label-mirror-all').textContent = hasMirroring ? '全部投屏' : '暂停全部';
+      renderAll();
+      announce(hasMirroring ? '已暂停所有设备的 scrcpy-server 投屏会话' : '已恢复所有就绪设备的实时投屏');
+    }
+
+    function toggleDeviceMirror(serial, e) {
+      if (e) e.stopPropagation();
+      const d = devices.find(item => item.serial === serial);
+      if (!d) return;
+      if (d.status === 'unauthorized') {
+        authorizeDevice(serial);
+        return;
+      }
+      d.status = d.status === 'mirroring' ? 'ready' : 'mirroring';
+      if (d.status === 'mirroring') {
+        d.fps = currentQuality === '1080p' ? 60 : currentQuality === '540p' ? 20 : 30;
+        d.bitrate = currentQuality === '1080p' ? '4.0M' : currentQuality === '540p' ? '800K' : '1.5M';
+      } else {
+        d.fps = 0;
+        d.bitrate = '0M';
+      }
+      renderAll();
+      announce(d.status === 'mirroring' ? `${d.name} 已开始投屏` : `${d.name} 已断开投屏会话`);
+    }
+
+    function authorizeDevice(serial) {
+      const d = devices.find(item => item.serial === serial);
+      if (!d) return;
+      d.status = 'mirroring';
+      d.os = 'Android 15 · API 35';
+      d.role = 'slave';
+      d.inGroup = true;
+      d.fps = 30;
+      d.bitrate = '1.5M';
+      updateGroupSyncButton();
+      renderAll();
+      announce(`${d.name} (${d.serial}) 已授权 USB 调试并自动接入投屏`);
+    }
+
+    function onSidebarDeviceClick(serial) {
+      const d = devices.find(item => item.serial === serial);
+      if (!d) return;
+      if (d.status === 'unauthorized') {
+        authorizeDevice(serial);
+        return;
+      }
+      if (featureStage === 'p34') {
+        if (d.role === 'master') {
+          announce(`${d.name} 当前为主控源，可点击其他设备的“设为主控”切换`);
+          return;
+        }
+        d.inGroup = !d.inGroup;
+        d.role = d.inGroup ? 'slave' : 'idle';
+        updateGroupSyncButton();
+        renderAll();
+        announce(d.inGroup ? `${d.name} 已加入群控组` : `${d.name} 已切出群控组（独立控制）`);
+      } else {
+        toggleFocus(serial);
+      }
+    }
+
+    function setAsMaster(serial, e) {
+      if (e) e.stopPropagation();
+      const target = devices.find(d => d.serial === serial);
+      if (!target || target.status === 'unauthorized') return;
+      devices.forEach(d => {
+        if (d.serial === serial) {
+          d.role = 'master';
+          d.inGroup = true;
+        } else if (d.role === 'master') {
+          d.role = d.inGroup ? 'slave' : 'idle';
+        }
+      });
+      updateGroupSyncButton();
+      renderAll();
+      announce(`已将 ${target.name} (${target.width}×${target.height}) 设为群控主控机`);
+    }
+
+    function selectAllSlaves() {
+      devices.forEach(d => {
+        if (d.status === 'unauthorized') {
+          d.status = 'mirroring';
+          d.os = 'Android 15 · API 35';
+          d.fps = 30;
+          d.bitrate = '1.5M';
+        }
+        d.inGroup = true;
+        if (d.role !== 'master') d.role = 'slave';
+      });
+      updateGroupSyncButton();
+      renderAll();
+      announce('已将全部在线真机纳入群控受控组');
+    }
+
+    function toggleFocus(serial) {
+      focusedSerial = focusedSerial === serial ? null : serial;
+      renderWall();
+      const d = devices.find(item => item.serial === serial);
+      if (d) {
+        announce(focusedSerial ? `已进入 ${d.name} 专注放大视图` : '已退出专注模式，恢复多机网格墙');
+      }
+    }
+
+    function toggleRotate(serial) {
+      const d = devices.find(item => item.serial === serial);
+      if (!d || d.status !== 'mirroring') return;
+      d.rotated = !d.rotated;
+      renderWall();
+      announce(`${d.name} 已切换至${d.rotated ? '横屏' : '竖屏'}会话分辨率 (${d.rotated ? d.height + '×' + d.width : d.width + '×' + d.height})`);
+    }
+
+    function toggleScreenPower(serial) {
+      const d = devices.find(item => item.serial === serial);
+      if (!d || d.status !== 'mirroring') return;
+      d.screenOff = !d.screenOff;
+      drawAllCanvases();
+      announce(`${d.name} 已发送 DISPLAY_POWER=${!d.screenOff} (${d.screenOff ? '熄屏待机' : '亮屏唤醒'})`);
+    }
+
+    function captureScreenshot(serial) {
+      const d = devices.find(item => item.serial === serial);
+      if (!d || d.status !== 'mirroring') return;
+      d.flash = true;
+      drawAllCanvases();
+      setTimeout(() => {
+        d.flash = false;
+        drawAllCanvases();
+      }, 180);
+      announce(`已保存 ${d.name} 实时高清截图至 ~/Pictures/DroidWall/${d.model}.png`);
+    }
+
+    function renderSidebar() {
+      const list = document.getElementById('sidebar-device-list');
+      const isP34 = featureStage === 'p34';
+
+      list.innerHTML = devices.map(d => {
+        const isUnauth = d.status === 'unauthorized';
+        const isMirroring = d.status === 'mirroring';
+        const isMaster = isP34 && d.role === 'master';
+        const isSlave = isP34 && d.role === 'slave' && d.inGroup && groupSyncEnabled;
+
+        const statusDotClass = isUnauth
+          ? 'bg-[var(--accent-amber)]'
+          : isMirroring
+          ? 'bg-[var(--accent-green)]'
+          : 'bg-[var(--text-tertiary)]';
+
+        let trailingTag = '';
+        if (isUnauth) {
+          trailingTag = `<span class="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--accent-amber)]/15 text-[var(--accent-amber)]">待授权</span>`;
+        } else if (isP34) {
+          if (isMaster) {
+            trailingTag = `<span class="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--accent-blue)] text-white">主控</span>`;
+          } else if (isSlave) {
+            trailingTag = `<span class="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--accent-blue-soft)] text-[var(--accent-blue)]">同步</span>`;
+          } else {
+            trailingTag = `<span class="text-[10px] text-[var(--text-tertiary)]">独立</span>`;
+          }
+        } else {
+          trailingTag = `<span class="text-[10px] font-medium ${isMirroring ? 'text-[var(--accent-green)]' : 'text-[var(--text-tertiary)]'}">${isMirroring ? '投屏中' : '就绪'}</span>`;
+        }
+
+        const activeBg = (isMaster || (focusedSerial === d.serial))
+          ? 'bg-[var(--glass-tint-active)]'
+          : '';
+
+        return `
+          <div role="button"
+               tabindex="0"
+               onclick="onSidebarDeviceClick('${d.serial}')"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onSidebarDeviceClick('${d.serial}');}"
+               class="sidebar-item rounded-[10px] px-2.5 py-2 cursor-pointer ${activeBg}">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="w-2 h-2 rounded-full ${statusDotClass} shrink-0"></span>
+                <span class="text-[12.5px] font-medium truncate text-[var(--text-primary)]">${d.name}</span>
+              </div>
+              ${trailingTag}
+            </div>
+            <div class="flex items-center justify-between mt-1 pl-4 text-[11px] text-[var(--text-tertiary)]">
+              <span class="mono-num truncate">${d.width}×${d.height}</span>
+              ${
+                isP34 && !isMaster && !isUnauth
+                  ? `<button type="button" onclick="setAsMaster('${d.serial}', event)" class="text-[10.5px] text-[var(--accent-blue)] hover:underline">设为主控</button>`
+                  : `<span class="truncate">${d.model}</span>`
+              }
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderWall() {
+      const wall = document.getElementById('device-wall');
+      const isP34 = featureStage === 'p34';
+      const visibleDevices = focusedSerial
+        ? devices.filter(d => d.serial === focusedSerial)
+        : devices; // 全量展示在线设备，自动换行滚动，不截断
+
+      wall.className = `grid gap-5 items-start ${
+        focusedSerial
+          ? 'grid-cols-1 max-w-md mx-auto w-full'
+          : gridCols === 2
+          ? 'grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto'
+          : gridCols === 3
+          ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+          : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+      }`;
+
+      wall.innerHTML = visibleDevices.map(d => {
+        const isUnauth = d.status === 'unauthorized';
+        const isMirroring = d.status === 'mirroring';
+        const isMaster = isP34 && groupSyncEnabled && d.role === 'master';
+        const isSlave = isP34 && groupSyncEnabled && d.role === 'slave' && d.inGroup && !isUnauth;
+        const cardRoleClass = isMaster ? 'is-master' : isSlave ? 'is-slave' : '';
+
+        const canvasW = d.rotated ? 320 : 210;
+        const canvasH = d.rotated ? 200 : 410;
+
+        return `
+          <article class="device-card ${cardRoleClass} overflow-hidden flex flex-col"
+                   ondragover="handleDragOver(event)"
+                   ondrop="handleCardDrop(event, '${d.serial}')">
+
+            <!-- 卡片顶栏：极简设备信息与控制按钮 -->
+            <div class="px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-[var(--content-divider)] bg-[var(--device-header-bg)]">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="w-2 h-2 rounded-full shrink-0 ${isUnauth ? 'bg-[var(--accent-amber)]' : isMirroring ? 'bg-[var(--accent-green)]' : 'bg-[var(--text-tertiary)]'}"></span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[12.5px] font-semibold truncate text-[var(--text-primary)]">${d.name}</span>
+                    ${isMaster ? `<span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--accent-blue)] text-white leading-none">主控</span>` : ''}
+                    ${isSlave ? `<span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] leading-none">受控</span>` : ''}
+                  </div>
+                  <div class="mono-num text-[10.5px] text-[var(--text-tertiary)] truncate">${d.os}</div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1 shrink-0">
+                <span class="mono-num text-[10.5px] text-[var(--text-tertiary)] mr-1 hidden sm:inline">
+                  ${isMirroring ? `${d.fps}fps` : isUnauth ? '未授权' : '就绪'}
+                </span>
+
+                ${isP34 && !isUnauth ? `
+                  <button type="button"
+                          onclick="triggerSingleDrop('${d.serial}')"
+                          aria-label="发送文件到 ${d.name}"
+                          title="发送 APK 或文件到该设备"
+                          class="nav-btn w-7 h-7 rounded-full flex items-center justify-center text-[var(--text-secondary)]">
+                    <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                  </button>
+                ` : ''}
+
+                <button type="button"
+                        onclick="toggleDeviceMirror('${d.serial}', event)"
+                        aria-label="${isMirroring ? '暂停投屏' : '开始投屏'}"
+                        title="${isMirroring ? '断开当前投屏会话' : '启动投屏会话'}"
+                        class="nav-btn w-7 h-7 rounded-full flex items-center justify-center text-[var(--text-secondary)]">
+                  ${isMirroring
+                    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>`
+                    : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>`
+                  }
+                </button>
+
+                <button type="button"
+                        onclick="toggleFocus('${d.serial}')"
+                        aria-label="${focusedSerial === d.serial ? '退出专注模式' : '专注放大'}"
+                        title="${focusedSerial === d.serial ? '退出专注模式' : '专注放大视图'}"
+                        class="nav-btn w-7 h-7 rounded-full flex items-center justify-center text-[var(--text-secondary)]">
+                  <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    ${focusedSerial === d.serial
+                      ? `<polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line>`
+                      : `<polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line>`
+                    }
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- 屏幕视口垫层：padding 6px + canvas 18px 同心圆角 -->
+            <div class="relative p-1.5 bg-[var(--device-well)] flex items-center justify-center">
+              <canvas id="canvas-${d.serial}"
+                      width="${canvasW}"
+                      height="${canvasH}"
+                      class="device-screen-canvas w-full h-auto max-h-[420px] object-contain cursor-pointer touch-none block"
+                      onpointerdown="onCanvasPointerDown(event, '${d.serial}')"
+                      onpointermove="onCanvasPointerMove(event, '${d.serial}')"
+                      onpointerup="onCanvasPointerUp(event, '${d.serial}')"
+                      onpointercancel="onCanvasPointerUp(event, '${d.serial}')"></canvas>
+
+              ${d.transfer ? `
+                <div class="liquid-hud absolute inset-x-4 bottom-4 px-3 py-2 rounded-2xl text-[11.5px] space-y-1.5">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-medium truncate text-[var(--text-primary)]">${d.transfer.type === 'apk' ? '安装 APK' : '推送文件'}: ${d.transfer.name}</span>
+                    <span class="mono-num text-[var(--accent-blue)] font-semibold">${d.transfer.progress}%</span>
+                  </div>
+                  <div class="w-full h-1.5 rounded-full bg-[var(--glass-tint-hover)] overflow-hidden">
+                    <div class="h-full rounded-full bg-[var(--accent-blue)] transition-all duration-150" style="width: ${d.transfer.progress}%"></div>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- 卡片底部极简导航操控栏 -->
+            <div class="px-2.5 py-1.5 flex items-center justify-between bg-[var(--device-header-bg)] border-t border-[var(--content-divider)] text-[var(--text-secondary)]">
+              <div class="flex items-center gap-0.5">
+                <button type="button" onclick="onNavClick('${d.serial}', 'BACK')" aria-label="返回 Back" title="返回 (Back)" class="nav-btn w-8 h-7 rounded-full flex items-center justify-center">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+                <button type="button" onclick="onNavClick('${d.serial}', 'HOME')" aria-label="桌面 Home" title="回到桌面 (Home)" class="nav-btn w-8 h-7 rounded-full flex items-center justify-center">
+                  <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="7"></circle>
+                  </svg>
+                </button>
+                <button type="button" onclick="onNavClick('${d.serial}', 'APP_SWITCH')" aria-label="多任务 Recents" title="最近任务 (Recents)" class="nav-btn w-8 h-7 rounded-full flex items-center justify-center">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="5" y="5" width="14" height="14" rx="3"></rect>
+                  </svg>
+                </button>
+              </div>
+
+              <div class="flex items-center gap-0.5">
+                <button type="button" onclick="toggleRotate('${d.serial}')" aria-label="旋转屏幕" title="模拟横竖屏旋转 (SessionMeta 自适应)" class="nav-btn w-7 h-7 rounded-full flex items-center justify-center">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 7v6h-6"></path>
+                    <path d="M20 13a8 8 0 1 0-2.34 5.66"></path>
+                  </svg>
+                </button>
+                <button type="button" onclick="toggleScreenPower('${d.serial}')" aria-label="息屏或亮屏" title="关闭或唤醒设备屏幕 (Display Power)" class="nav-btn w-7 h-7 rounded-full flex items-center justify-center">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                    <line x1="12" y1="2" x2="12" y2="12"></line>
+                  </svg>
+                </button>
+                <button type="button" onclick="captureScreenshot('${d.serial}')" aria-label="截图" title="保存当前高清截图" class="nav-btn w-7 h-7 rounded-full flex items-center justify-center">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                    <circle cx="12" cy="13" r="4"></circle>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+          </article>
+        `;
+      }).join('');
+
+      drawAllCanvases();
+    }
+
+    // 绘制高清晰现代 Android 16 / Material You 模拟屏幕
+    function drawAllCanvases() {
+      const darkUI = getResolvedScheme() === 'dark';
+
+      devices.forEach(d => {
+        const canvas = document.getElementById('canvas-' + d.serial);
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+
+        ctx.clearRect(0, 0, W, H);
+
+        // 未授权态
+        if (d.status === 'unauthorized') {
+          ctx.fillStyle = darkUI ? '#12151c' : '#e2e8f0';
+          ctx.fillRect(0, 0, W, H);
+
+          ctx.fillStyle = 'rgba(255, 159, 10, 0.16)';
+          ctx.beginPath();
+          ctx.arc(W / 2, H / 2 - 42, 24, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = '#ff9f0a';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(W / 2 - 9, H / 2 - 44, 18, 14, 3);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(W / 2, H / 2 - 46, 5, Math.PI, 0);
+          ctx.stroke();
+
+          ctx.fillStyle = darkUI ? 'rgba(255,255,255,0.92)' : 'rgba(15,23,42,0.9)';
+          ctx.font = '600 12.5px -apple-system, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('等待 USB 调试授权', W / 2, H / 2 + 2);
+
+          ctx.fillStyle = darkUI ? 'rgba(255,255,255,0.52)' : 'rgba(15,23,42,0.55)';
+          ctx.font = '11px -apple-system, sans-serif';
+          ctx.fillText('点击屏幕或左侧条目模拟允许', W / 2, H / 2 + 24);
+          return;
+        }
+
+        // 就绪但未投屏态
+        if (d.status === 'ready') {
+          ctx.fillStyle = darkUI ? '#101217' : '#e5e9f0';
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = darkUI ? 'rgba(255,255,255,0.45)' : 'rgba(15,23,42,0.48)';
+          ctx.font = '500 12px -apple-system, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('投屏会话已暂停', W / 2, H / 2 - 6);
+          ctx.font = '11px -apple-system, sans-serif';
+          ctx.fillText('点击右上角播放按钮恢复画面', W / 2, H / 2 + 16);
+          return;
+        }
+
+        // 息屏待机态
+        if (d.screenOff) {
+          ctx.fillStyle = '#050608';
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = 'rgba(255,255,255,0.22)';
+          ctx.font = '300 28px -apple-system, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('15:30', W / 2, H / 2 - 10);
+          ctx.font = '10.5px -apple-system, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.32)';
+          ctx.fillText('Display Power Off · 点击亮屏', W / 2, H / 2 + 16);
+          return;
+        }
+
+        // 现代 Material You 壁纸渐变
+        const grad = ctx.createLinearGradient(0, 0, W, H);
+        if (d.page === 0) {
+          grad.addColorStop(0, '#0b1736');
+          grad.addColorStop(0.55, '#132a4a');
+          grad.addColorStop(1, '#0d1b2a');
+        } else if (d.page === 1) {
+          grad.addColorStop(0, '#0c1f24');
+          grad.addColorStop(1, '#101826');
+        } else {
+          grad.addColorStop(0, '#1a1829');
+          grad.addColorStop(1, '#0e1118');
+        }
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        // 背景柔和光晕
+        const glow = ctx.createRadialGradient(W * 0.72, H * 0.28, 6, W * 0.72, H * 0.28, W * 0.65);
+        glow.addColorStop(0, d.page === 1 ? 'rgba(48, 209, 88, 0.24)' : 'rgba(10, 132, 255, 0.26)');
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+
+        // 顶部状态栏与前置摄像头打孔
+        ctx.fillStyle = 'rgba(255,255,255,0.82)';
+        ctx.font = '500 10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('15:30', 12, 16);
+
+        ctx.fillStyle = '#040507';
+        ctx.beginPath();
+        ctx.arc(W / 2, 12, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.82)';
+        ctx.textAlign = 'right';
+        ctx.fillText('5G · 96%', W - 12, 16);
+
+        if (d.page === 0) {
+          // 桌面时钟组件
+          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          ctx.font = d.rotated ? '300 24px -apple-system, sans-serif' : '300 32px -apple-system, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('15:30', 16, d.rotated ? 48 : 60);
+
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.font = '10.5px -apple-system, sans-serif';
+          ctx.fillText('11月20日 周五 · 晴 22°', 16, d.rotated ? 65 : 78);
+
+          // 磨砂数据卡片
+          const cardY = d.rotated ? 76 : 94;
+          const cardH = d.rotated ? 44 : 58;
+          ctx.fillStyle = 'rgba(255,255,255,0.10)';
+          ctx.beginPath();
+          ctx.roundRect(14, cardY, W - 28, cardH, 12);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.font = '500 11px -apple-system, sans-serif';
+          ctx.fillText(d.model, 24, cardY + 21);
+          ctx.fillStyle = 'rgba(255,255,255,0.55)';
+          ctx.font = '10px monospace';
+          ctx.fillText(`${d.rotated ? d.height : d.width}×${d.rotated ? d.width : d.height} · H.264 WebCodecs`, 24, cardY + 38);
+
+          // App 图标网格
+          const apps = [
+            { name: '应用测试', color: '#0a84ff' },
+            { name: 'Chrome', color: '#30d158' },
+            { name: '系统设置', color: '#5e5ce6' },
+            { name: '相册', color: '#ff9f0a' }
+          ];
+          const gridTop = d.rotated ? 132 : 172;
+          const cols = d.rotated ? 4 : 2;
+          const cellW = (W - 28) / cols;
+
+          apps.forEach((app, i) => {
+            const c = i % cols;
+            const r = Math.floor(i / cols);
+            const cx = 14 + c * cellW + cellW / 2;
+            const cy = gridTop + r * 72;
+
+            ctx.fillStyle = app.color;
+            ctx.beginPath();
+            ctx.roundRect(cx - 18, cy, 36, 36, 10);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx.beginPath();
+            ctx.arc(cx, cy + 18, 6.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255,255,255,0.82)';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(app.name, cx, cy + 50);
+          });
+
+          // 底部搜索胶囊
+          if (!d.rotated) {
+            ctx.fillStyle = 'rgba(255,255,255,0.14)';
+            ctx.beginPath();
+            ctx.roundRect(16, H - 46, W - 32, 26, 13);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.font = '10.5px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('点击或拖动屏幕模拟触控', 28, H - 29);
+          }
+        } else {
+          // 二级页面（应用详情 / 开发者选项）
+          const title = d.page === 1 ? '被测应用 · 实时调试视图' : 'Android 开发者选项';
+          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          ctx.font = '600 13px -apple-system, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(title, 16, 46);
+
+          ctx.fillStyle = 'rgba(255,255,255,0.52)';
+          ctx.font = '10.5px monospace';
+          ctx.fillText(`serial: ${d.serial}`, 16, 63);
+
+          const rows = d.page === 1
+            ? ['VideoToolbox 硬解通道已激活', '归一化指针映射正常', 'WebSocket 低延迟回环通道']
+            : ['USB 调试 · 已开启', '指针位置反馈 · 已同步', 'ADB 端口转发 · 活跃'];
+
+          rows.forEach((label, idx) => {
+            const ry = 82 + idx * 44;
+            if (ry + 36 > H - 24) return;
+            ctx.fillStyle = 'rgba(255,255,255,0.09)';
+            ctx.beginPath();
+            ctx.roundRect(14, ry, W - 28, 36, 10);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255,255,255,0.88)';
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(label, 24, ry + 22);
+
+            ctx.fillStyle = '#30d158';
+            ctx.beginPath();
+            ctx.arc(W - 28, ry + 18, 4, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+
+        // 手势导航条
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.beginPath();
+        ctx.roundRect(W / 2 - 26, H - 10, 52, 3, 1.5);
+        ctx.fill();
+
+        // 触控涟漪反馈
+        d.ripples.forEach(r => {
+          const rx = r.xRatio * W;
+          const ry = r.yRatio * H;
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(rx, ry, r.radius, 0, Math.PI * 2);
+          ctx.fillStyle = r.isPrimary ? 'rgba(10, 132, 255, 0.34)' : 'rgba(48, 209, 88, 0.34)';
+          ctx.fill();
+          ctx.lineWidth = 1.8;
+          ctx.strokeStyle = r.isPrimary ? '#0a84ff' : '#30d158';
+          ctx.stroke();
+          ctx.restore();
+        });
+
+        // 截图快门白光闪烁
+        if (d.flash) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+          ctx.fillRect(0, 0, W, H);
+        }
+      });
+    }
+
+    // 归一化坐标事件分发：阶段 1-2 单机控屏，阶段 3-4 自动按群控策略广播
+    function emitNormalizedTouch(sourceSerial, xRatio, yRatio, isClick) {
+      const source = devices.find(d => d.serial === sourceSerial);
+      if (!source) return;
+      if (source.status === 'unauthorized') {
+        authorizeDevice(sourceSerial);
+        return;
+      }
+      if (source.status !== 'mirroring') return;
+      if (source.screenOff && isClick) {
+        source.screenOff = false;
+        drawAllCanvases();
+        announce(`已点击唤醒 ${source.name}`);
+        return;
+      }
+
+      document.getElementById('hud-coords').textContent = `${xRatio.toFixed(2)}, ${yRatio.toFixed(2)}`;
+
+      const isBroadcast = featureStage === 'p34' && groupSyncEnabled && (source.role === 'master' || source.inGroup);
+      const targets = isBroadcast
+        ? devices.filter(d => d.inGroup && d.status === 'mirroring' && !d.screenOff)
+        : [source];
+
+      targets.forEach(t => {
+        t.ripples.push({
+          xRatio,
+          yRatio,
+          radius: isClick ? 15 : 8,
+          isPrimary: t.serial === sourceSerial
+        });
+        if (t.ripples.length > 6) t.ripples.shift();
+
+        if (isClick && yRatio > 0.32 && yRatio < 0.78) {
+          t.page = (t.page + 1) % 3;
+        }
+      });
+
+      if (isClick) {
+        if (isBroadcast) {
+          const coordsList = targets
+            .map(t => {
+              const rw = t.rotated ? t.height : t.width;
+              const rh = t.rotated ? t.width : t.height;
+              return `${t.model}(${Math.round(xRatio * rw)},${Math.round(yRatio * rh)})`;
+            })
+            .join(' · ');
+          announce(`群控归一化同步 (${targets.length}台): ${coordsList}`);
+        } else {
+          const rw = source.rotated ? source.height : source.width;
+          const rh = source.rotated ? source.width : source.height;
+          announce(`单机触控 ${source.name} → 换算像素 (${Math.round(xRatio * rw)}, ${Math.round(yRatio * rh)})`);
+        }
+      }
+
+      drawAllCanvases();
+      setTimeout(() => {
+        targets.forEach(t => t.ripples.shift());
+        drawAllCanvases();
+      }, 380);
+    }
+
+    function getCanvasRatio(e, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        xRatio: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
+        yRatio: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
+      };
+    }
+
+    function onCanvasPointerDown(e, serial) {
+      isPointerDown = true;
+      activePointerSerial = serial;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const { xRatio, yRatio } = getCanvasRatio(e, e.currentTarget);
+      emitNormalizedTouch(serial, xRatio, yRatio, true);
+    }
+
+    function onCanvasPointerMove(e, serial) {
+      if (!isPointerDown || activePointerSerial !== serial) return;
+      const now = Date.now();
+      if (now - lastTrailTime < 35) return;
+      lastTrailTime = now;
+      const { xRatio, yRatio } = getCanvasRatio(e, e.currentTarget);
+      emitNormalizedTouch(serial, xRatio, yRatio, false);
+    }
+
+    function onCanvasPointerUp() {
+      isPointerDown = false;
+      activePointerSerial = null;
+    }
+
+    function onNavClick(serial, key) {
+      const source = devices.find(d => d.serial === serial);
+      if (!source || source.status !== 'mirroring') return;
+
+      const isBroadcast = featureStage === 'p34' && groupSyncEnabled && source.inGroup;
+      const targets = isBroadcast
+        ? devices.filter(d => d.inGroup && d.status === 'mirroring')
+        : [source];
+
+      targets.forEach(t => {
+        if (key === 'HOME') t.page = 0;
+        else if (key === 'BACK') t.page = Math.max(0, t.page - 1);
+        else if (key === 'APP_SWITCH') t.page = (t.page + 1) % 3;
+      });
+      drawAllCanvases();
+      announce(`${isBroadcast ? '群控' : '单机'}按键 KEYCODE_${key} 已发送至 ${targets.length} 台设备`);
+    }
+
+    function startTransferSimulation(targets, fileName, type) {
+      if (targets.length === 0) return;
+      announce(type === 'apk'
+        ? `正在并发向 ${targets.length} 台设备执行 adb install -r -t ${fileName}...`
+        : `正在批量推送 ${fileName} 至 ${targets.length} 台设备...`);
+
+      targets.forEach(d => {
+        d.transfer = { name: fileName, progress: 12, type };
+      });
+      renderWall();
+
+      const timer = setInterval(() => {
+        let done = true;
+        targets.forEach(d => {
+          if (d.transfer && d.transfer.progress < 100) {
+            d.transfer.progress = Math.min(100, d.transfer.progress + 28);
+            if (d.transfer.progress < 100) done = false;
+          }
+        });
+        renderWall();
+        if (done) {
+          clearInterval(timer);
+          setTimeout(() => {
+            targets.forEach(d => {
+              d.transfer = null;
+              if (type === 'apk') d.page = 1;
+            });
+            renderWall();
+            announce(`${fileName} 已全部处理完成`);
+          }, 420);
+        }
+      }, 240);
+    }
+
+    function triggerBatchDrop(type) {
+      const targets = devices.filter(d => d.inGroup && d.status !== 'unauthorized');
+      startTransferSimulation(targets, type === 'apk' ? 'app-release-v2.4.apk' : 'config.json', type);
+    }
+
+    function triggerSingleDrop(serial) {
+      const dev = devices.find(d => d.serial === serial);
+      if (dev && dev.status !== 'unauthorized') {
+        startTransferSimulation([dev], 'debug-build.apk', 'apk');
+      }
+    }
+
+    function handleDragOver(e) { e.preventDefault(); }
+    function handleGlobalDrop(e) {
+      e.preventDefault();
+      if (featureStage !== 'p34') return;
+      const file = e.dataTransfer?.files?.[0];
+      const name = file ? file.name : 'app-release.apk';
+      const targets = devices.filter(d => d.inGroup && d.status !== 'unauthorized');
+      startTransferSimulation(targets, name, name.endsWith('.apk') ? 'apk' : 'file');
+    }
+    function handleCardDrop(e, serial) {
+      e.preventDefault();
+      if (featureStage !== 'p34') return;
+      const dev = devices.find(d => d.serial === serial);
+      if (!dev || dev.status === 'unauthorized') return;
+      const file = e.dataTransfer?.files?.[0];
+      const name = file ? file.name : 'single-build.apk';
+      startTransferSimulation([dev], name, name.endsWith('.apk') ? 'apk' : 'file');
+    }
+
+    // 工具栏焦点组回退（仅当浏览器原生不支持 focusgroup 时挂接）
+    function setupToolbarFallback() {
+      if ('focusGroup' in HTMLElement.prototype) return;
+      const bar = document.querySelector('[role="toolbar"]');
+      if (!bar) return;
+      const getItems = () => Array.from(bar.querySelectorAll('button')).filter(b => b.offsetParent !== null);
+      const syncTabIndex = (activeEl) => {
+        const items = getItems();
+        items.forEach((b, i) => {
+          b.tabIndex = activeEl ? (b === activeEl ? 0 : -1) : (i === 0 ? 0 : -1);
+        });
+      };
+      syncTabIndex(null);
+      bar.addEventListener('focusin', (e) => {
+        if (e.target.tagName === 'BUTTON') syncTabIndex(e.target);
+      });
+      bar.addEventListener('keydown', (e) => {
+        const items = getItems();
+        const idx = items.indexOf(document.activeElement);
+        if (idx === -1) return;
+        const rtl = getComputedStyle(bar).direction === 'rtl';
+        let next = null;
+        if (e.key === 'ArrowRight') next = (idx + (rtl ? -1 : 1) + items.length) % items.length;
+        else if (e.key === 'ArrowLeft') next = (idx + (rtl ? 1 : -1) + items.length) % items.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = items.length - 1;
+        if (next !== null) {
+          e.preventDefault();
+          items[next].focus();
+        }
+      });
+    }
+
+    function renderAll() {
+      renderSidebar();
+      renderWall();
+    }
+
+    updateThemeToggleIcon();
+    updateGroupSyncButton();
+    setupToolbarFallback();
+    renderAll();
+  </script>
+</body>
+</html>

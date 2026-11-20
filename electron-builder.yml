@@ -1,0 +1,26 @@
+appId: com.droidwall.app
+productName: DroidWall
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**/*
+  - package.json
+  - "!resources/**"
+extraResources:
+  - from: resources/scrcpy-server.jar
+    to: scrcpy-server.jar
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: dir
+      arch:
+        - arm64
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null
+dmg:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
