@@ -1,9 +1,12 @@
 import { FolderOpen, Pause, Play, RefreshCw } from 'lucide-react'
 import { useDeviceStore } from '../store/useDeviceStore'
+import { formatBytes } from './EmulatorModal'
 
 export function Sidebar() {
   const adbStatus = useDeviceStore((s) => s.adbStatus)
   const devices = useDeviceStore((s) => s.devices)
+  const avds = useDeviceStore((s) => s.avds)
+  const startingAvdNames = useDeviceStore((s) => s.startingAvdNames)
   const mirrorStates = useDeviceStore((s) => s.mirrorStates)
   const sidebarCollapsed = useDeviceStore((s) => s.sidebarCollapsed)
   const focusedSerial = useDeviceStore((s) => s.focusedSerial)
@@ -11,6 +14,7 @@ export function Sidebar() {
   const toggleAllMirrors = useDeviceStore((s) => s.toggleAllMirrors)
   const startMirror = useDeviceStore((s) => s.startMirror)
   const stopMirror = useDeviceStore((s) => s.stopMirror)
+  const setActiveModal = useDeviceStore((s) => s.setActiveModal)
   const pickAdbPath = useDeviceStore((s) => s.pickAdbPath)
   const refreshAdb = useDeviceStore((s) => s.refreshAdb)
 
@@ -50,8 +54,15 @@ export function Sidebar() {
         {/* 设备列表 */}
         <div className="mt-3.5 px-1.5 flex items-center justify-between shrink-0">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-            USB 真机 (<span className="mono-num">{devices.length}</span>)
+            已连接设备 (<span className="mono-num">{devices.length}</span>)
           </span>
+          <button
+            type="button"
+            onClick={() => setActiveModal('wireless')}
+            className="text-[11px] font-medium text-[var(--accent-blue)] hover:underline cursor-pointer"
+          >
+            + 无线
+          </button>
         </div>
 
         <div className="mt-1.5 flex-1 overflow-y-auto glass-scroller space-y-0.5 pr-0.5">
@@ -153,6 +164,76 @@ export function Sidebar() {
                 </div>
               )
             })
+          )}
+
+          {/* 模拟器 AVD 快速分组 */}
+          <div className="pt-3 px-1.5 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+              模拟器 AVD (<span className="mono-num">{avds.length}</span>)
+            </span>
+            <button
+              type="button"
+              onClick={() => setActiveModal('emulator', 'create')}
+              className="text-[11px] font-medium text-[var(--accent-blue)] hover:underline cursor-pointer"
+            >
+              + 新建
+            </button>
+          </div>
+
+          {avds.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setActiveModal('emulator', 'create')}
+              className="w-full px-2.5 py-2.5 text-center rounded-[10px] bg-[var(--tint-hover)] text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer"
+            >
+              暂无模拟器 · 点击新建或管理
+            </button>
+          ) : (
+            avds.map((avd) => (
+              <div
+                key={avd.name}
+                role="button"
+                tabIndex={0}
+                onClick={() => setActiveModal('emulator', 'list')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setActiveModal('emulator', 'list')
+                  }
+                }}
+                className="sidebar-row rounded-[9px] px-2.5 py-2 cursor-pointer border border-transparent"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${
+                        avd.status === 'running'
+                          ? 'bg-[var(--accent-green)]'
+                          : startingAvdNames[avd.name]
+                          ? 'bg-[var(--accent-blue)] animate-pulse'
+                          : 'bg-[var(--text-tertiary)]'
+                      }`}
+                    />
+                    <span className="text-[12.5px] font-medium truncate text-[var(--text-primary)]">{avd.name}</span>
+                  </div>
+                  <span
+                    className={`text-[10.5px] shrink-0 ${
+                      avd.status === 'running'
+                        ? 'text-[var(--accent-green)] font-medium'
+                        : startingAvdNames[avd.name]
+                        ? 'text-[var(--accent-blue)] font-medium'
+                        : 'text-[var(--text-tertiary)]'
+                    }`}
+                  >
+                    {avd.status === 'running' ? '运行中' : startingAvdNames[avd.name] ? '启动中' : '已关机'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-1 pl-4 text-[11px] text-[var(--text-tertiary)]">
+                  <span className="mono-num truncate">{avd.runningSerial || avd.resolution.split(' · ')[0]}</span>
+                  <span className="mono-num shrink-0 ml-2">{formatBytes(avd.sizeBytes)}</span>
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>

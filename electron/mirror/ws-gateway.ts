@@ -162,14 +162,19 @@ export class MirrorWsGateway {
         if (currentSet.size === 0) {
           this.clientsBySerial.delete(serial)
           this.sessionManager.getSession(serial)?.releaseActivePointers()
+          if (this.sessionManager.isSyncControlEnabled()) {
+            for (const s of this.sessionManager.getRunningSessions()) {
+              s.releaseActivePointers()
+            }
+          }
         }
       }
     })
   }
 
   private handleClientMessage(serial: string, raw: unknown): void {
-    const session = this.sessionManager.getSession(serial)
-    if (!session) return
+    const originSession = this.sessionManager.getSession(serial)
+    if (!originSession) return
 
     let msg: ClientControlMessage
     try {
@@ -180,6 +185,17 @@ export class MirrorWsGateway {
       return
     }
 
+    const targets = this.sessionManager.isSyncControlEnabled()
+      ? this.sessionManager.getRunningSessions()
+      : [originSession]
+    if (targets.length === 0) return
+
+    for (const session of targets) {
+      this.dispatchToSession(session, msg)
+    }
+  }
+
+  private dispatchToSession(session: DeviceSession, msg: ClientControlMessage): void {
     switch (msg.type) {
       case 'touch':
         session.sendNormalizedTouch({

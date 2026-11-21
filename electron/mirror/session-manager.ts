@@ -6,6 +6,7 @@ export class SessionManager extends EventEmitter {
   private sessions = new Map<string, DeviceSession>()
   private adbPath: string | null = null
   private quality: QualityPreset = '720p'
+  private syncControlEnabled = false
 
   setAdbPath(adbPath: string | null): void {
     this.adbPath = adbPath
@@ -15,8 +16,26 @@ export class SessionManager extends EventEmitter {
     return this.quality
   }
 
+  isSyncControlEnabled(): boolean {
+    return this.syncControlEnabled
+  }
+
+  setSyncControlEnabled(enabled: boolean): void {
+    if (this.syncControlEnabled === enabled) return
+    this.syncControlEnabled = enabled
+    if (!enabled) {
+      for (const session of this.sessions.values()) {
+        session.releaseActivePointers()
+      }
+    }
+  }
+
   getSession(serial: string): DeviceSession | undefined {
     return this.sessions.get(serial)
+  }
+
+  getRunningSessions(): DeviceSession[] {
+    return Array.from(this.sessions.values()).filter((s) => s.getState().status === 'running')
   }
 
   getAllStates(): MirrorState[] {

@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>DroidWall · 模拟器管理 Demo UI</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --shell-bg: light-dark(rgba(236, 239, 244, 0.94), rgba(22, 24, 30, 0.96));
+      --canvas-surface: light-dark(#ffffff, #0f1116);
+      --canvas-border: light-dark(rgba(15, 23, 42, 0.085), rgba(255, 255, 255, 0.085));
+      --shell-divider: light-dark(rgba(15, 23, 42, 0.08), rgba(255, 255, 255, 0.08));
+
+      --accent-blue: light-dark(#007aff, #0a84ff);
+      --accent-blue-soft: light-dark(rgba(0, 122, 255, 0.12), rgba(10, 132, 255, 0.22));
+      --accent-green: light-dark(#248a3d, #30d158);
+      --accent-amber: light-dark(#b25000, #ff9f0a);
+      --accent-red: light-dark(#d70015, #ff453a);
+      --accent-red-soft: light-dark(rgba(215, 0, 21, 0.10), rgba(255, 69, 58, 0.16));
+
+      --text-primary: light-dark(rgba(15, 23, 42, 0.92), rgba(255, 255, 255, 0.92));
+      --text-secondary: light-dark(rgba(15, 23, 42, 0.62), rgba(235, 235, 245, 0.62));
+      --text-tertiary: light-dark(rgba(15, 23, 42, 0.44), rgba(235, 235, 245, 0.40));
+
+      --action-pill-bg: light-dark(rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.06));
+      --action-pill-border: light-dark(rgba(15, 23, 42, 0.10), rgba(255, 255, 255, 0.10));
+      --tint-hover: light-dark(rgba(15, 23, 42, 0.055), rgba(255, 255, 255, 0.08));
+      --tint-active: light-dark(rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.12));
+
+      --device-shell: light-dark(#f8fafc, #181b22);
+      --device-shell-border: light-dark(rgba(15, 23, 42, 0.095), rgba(255, 255, 255, 0.095));
+      --device-well: light-dark(#edf1f6, #07090d);
+
+      --modal-glass: light-dark(rgba(248, 250, 252, 0.88), rgba(26, 29, 37, 0.86));
+      --modal-card: light-dark(rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.045));
+      --input-bg: light-dark(rgba(255, 255, 255, 0.9), rgba(0, 0, 0, 0.28));
+    }
+
+    :root[data-theme="dark"] { color-scheme: dark; }
+    :root[data-theme="light"] { color-scheme: light; }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", sans-serif;
+      color: var(--text-primary);
+      background: light-dark(#dde3ec, #090b0f);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono-num {
+      font-family: "SF Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 外层桌面窗口模拟 */
+    .desktop-stage {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .app-window {
+      width: 1180px;
+      height: 760px;
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 16px;
+      background: var(--shell-bg);
+      border: 1px solid var(--action-pill-border);
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 顶栏 */
+    .titlebar {
+      height: 40px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px 0 14px;
+    }
+
+    .traffic-lights {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-right: 12px;
+    }
+    .tl { width: 12px; height: 12px; border-radius: 50%; }
+    .tl-red { background: #ff5f57; }
+    .tl-yellow { background: #febc2e; }
+    .tl-green { background: #28c840; }
+
+    .tb-left, .tb-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tb-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+    }
+    .tb-btn:hover { background: var(--tint-hover); color: var(--text-primary); }
+    .tb-btn.active {
+      background: var(--tint-active);
+      color: var(--accent-blue);
+      border-color: var(--action-pill-border);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .tb-sep {
+      width: 1px;
+      height: 14px;
+      margin: 0 4px;
+      background: var(--shell-divider);
+    }
+
+    /* 主体区域 */
+    .workspace {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* 侧边栏 */
+    .sidebar {
+      width: 236px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 4px 10px 10px;
+    }
+
+    .sidebar-primary-btn {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: var(--action-pill-bg);
+      border: 1px solid var(--action-pill-border);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .sidebar-primary-btn:hover { background: var(--tint-active); }
+
+    .section-header {
+      margin-top: 14px;
+      padding: 0 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-tertiary);
+    }
+
+    .mini-link-btn {
+      border: none;
+      background: transparent;
+      color: var(--accent-blue);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: 5px;
+    }
+    .mini-link-btn:hover { background: var(--accent-blue-soft); }
+
+    .device-list {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .sidebar-row {
+      padding: 8px 10px;
+      border-radius: 9px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 140ms ease;
+    }
+    .sidebar-row:hover { background: var(--tint-hover); }
+
+    .row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .row-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green { background: var(--accent-green); }
+    .dot-gray { background: var(--text-tertiary); }
+    .dot-amber { background: var(--accent-amber); }
+
+    .row-title {
+      font-size: 12.5px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .row-sub {
+      margin-top: 3px;
+      padding-left: 15px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      color: var(--text-tertiary);
+    }
+
+    .adb-footer {
+      padding: 8px 6px 2px;
+      border-top: 1px solid var(--shell-divider);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+
+    /* 主画布 */
+    .content-canvas {
+      flex: 1;
+      margin: 0 8px 8px 0;
+      border-radius: 14px;
+      background: var(--canvas-surface);
+      border: 1px solid var(--canvas-border);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .wall-grid {
+      padding: 16px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+      overflow-y: auto;
+    }
+
+    .device-card {
+      background: var(--device-shell);
+      border: 1px solid var(--device-shell-border);
+      border-radius: 22px;
+      overflow: hidden;
+      max-width: 268px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .card-header {
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--shell-divider);
+    }
+    .card-well {
+      padding: 6px;
+      background: var(--device-well);
+    }
+    .card-screen {
+      aspect-ratio: 9 / 19.5;
+      border-radius: 14px;
+      background: linear-gradient(155deg, #1b2838 0%, #0f172a 55%, #1e1b4b 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 12px;
+      gap: 6px;
+      position: relative;
+    }
+    .emu-pill {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(10, 132, 255, 0.25);
+      border: 1px solid rgba(10, 132, 255, 0.45);
+      color: #7cc4ff;
+    }
+    .card-footer {
+      padding: 6px 12px;
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid var(--shell-divider);
+      color: var(--text-tertiary);
+      font-size: 11px;
+    }
+
+    /* Liquid Glass 模拟器管理模态窗 */
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.38);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      padding: 24px;
+      transition: opacity 160ms ease;
+    }
+    .modal-backdrop.hidden { display: none; }
+
+    .glass-modal {
+      width: 780px;
+      max-width: 100%;
+      max-height: 620px;
+      border-radius: 18px;
+      background: var(--modal-glass);
+      backdrop-filter: blur(32px) saturate(180%);
+      border: 1px solid var(--action-pill-border);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--shell-divider);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .modal-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      background: var(--accent-blue-soft);
+      color: var(--accent-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .modal-title { font-size: 14px; font-weight: 600; }
+    .modal-subtitle { font-size: 11.5px; color: var(--text-secondary); margin-top: 1px; }
+
+    .segmented {
+      display: inline-flex;
+      padding: 3px;
+      border-radius: 9px;
+      background: var(--tint-hover);
+      border: 1px solid var(--shell-divider);
+      gap: 2px;
+    }
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+    .seg-btn.active {
+      background: var(--tint-active);
+      color: var(--text-primary);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+
+    .modal-body {
+      padding: 16px 18px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* 环境与磁盘摘要条 */
+    .env-banner {
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--modal-card);
+      border: 1px solid var(--shell-divider);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      gap: 12px;
+    }
+    .env-chips { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: var(--tint-hover);
+      color: var(--text-secondary);
+    }
+    .chip.ok { color: var(--accent-green); background: rgba(48, 209, 88, 0.12); }
+    .chip.warn { color: var(--accent-amber); background: rgba(255, 159, 10, 0.14); }
+
+    /* AVD 列表卡片 */
+    .avd-list { display: flex; flex-direction: column; gap: 10px; }
+    .avd-item {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--modal-card);
+      border: 1px solid var(--shell-divider);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .avd-item:hover { border-color: var(--action-pill-border); }
+    .avd-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .avd-name-row { display: flex; align-items: center; gap: 8px; }
+    .avd-name { font-size: 13px; font-weight: 600; }
+    .badge {
+      font-size: 10.5px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+    .badge-running { background: rgba(48, 209, 88, 0.15); color: var(--accent-green); }
+    .badge-stopped { background: var(--tint-hover); color: var(--text-tertiary); }
+    .avd-specs {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .disk-tag {
+      color: var(--text-primary);
+      font-weight: 500;
+      padding: 1px 6px;
+      border-radius: 5px;
+      background: var(--tint-hover);
+    }
+
+    .avd-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .btn {
+      border: 1px solid var(--action-pill-border);
+      background: var(--action-pill-bg);
+      color: var(--text-primary);
+      font-size: 11.5px;
+      font-weight: 500;
+      padding: 6px 11px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn:hover { background: var(--tint-active); }
+    .btn-primary {
+      background: var(--accent-blue);
+      border-color: transparent;
+      color: #fff;
+    }
+    .btn-primary:hover { filter: brightness(1.08); background: var(--accent-blue); }
+    .btn-danger {
+      color: var(--accent-red);
+      border-color: rgba(255, 69, 58, 0.25);
+      background: var(--accent-red-soft);
+    }
+    .btn-danger:hover { background: rgba(255, 69, 58, 0.24); }
+
+    /* 新建模拟器表单 */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { font-size: 11.5px; font-weight: 500; color: var(--text-secondary); }
+    .input, .select {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 9px;
+      border: 1px solid var(--action-pill-border);
+      background: var(--input-bg);
+      color: var(--text-primary);
+      font-size: 12.5px;
+      outline: none;
+    }
+    .input:focus, .select:focus { border-color: var(--accent-blue); }
+
+    .form-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 6px;
+      border-top: 1px solid var(--shell-divider);
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+
+    /* 彻底删除确认弹层 */
+    .confirm-box {
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 69, 58, 0.35);
+      background: var(--accent-red-soft);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .confirm-box.hidden { display: none; }
+    .confirm-text { font-size: 12px; line-height: 1.5; }
+    .confirm-text strong { color: var(--accent-red); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="desktop-stage">
+    <div class="app-window">
+      <!-- 顶部栏 -->
+      <header class="titlebar">
+        <div class="tb-left">
+          <div class="traffic-lights">
+            <span class="tl tl-red"></span>
+            <span class="tl tl-yellow"></span>
+            <span class="tl tl-green"></span>
+          </div>
+          <button class="tb-btn" title="收起侧边栏">◧</button>
+          <span style="font-size:12.5px;font-weight:500;color:var(--text-secondary);margin-left:4px;">DroidWall</span>
+        </div>
+
+        <div class="tb-right">
+          <button class="tb-btn mono-num">540p</button>
+          <button class="tb-btn active mono-num">720p</button>
+          <button class="tb-btn mono-num">1080p</button>
+          <span class="tb-sep"></span>
+          <button class="tb-btn mono-num">2列</button>
+          <button class="tb-btn active mono-num">3列</button>
+          <button class="tb-btn mono-num">4列</button>
+          <span class="tb-sep"></span>
+          <button class="tb-btn">群控</button>
+          <button class="tb-btn">分发</button>
+          <button id="open-wifi-btn" class="tb-btn" onclick="openWifiModal()">📶 无线 (2)</button>
+          <button id="open-emu-btn" class="tb-btn active" onclick="openModal('list')">📱 模拟器 (2)</button>
+          <span class="tb-sep"></span>
+          <button class="tb-btn" onclick="toggleTheme()" title="切换浅色/深色">◐</button>
+        </div>
+      </header>
+
+      <!-- 主体工作区 -->
+      <div class="workspace">
+        <!-- 左侧边栏 -->
+        <aside class="sidebar">
+          <div>
+            <button class="sidebar-primary-btn">▶ 一键全部投屏</button>
+
+            <div class="section-header">
+              <span>已连接设备 (<span class="mono-num">2</span>)</span>
+              <button class="mini-link-btn" onclick="openWifiModal()">+ 无线</button>
+            </div>
+            <div class="device-list">
+              <div class="sidebar-row">
+                <div class="row-top">
+                  <div class="row-title-wrap">
+                    <span class="dot dot-green"></span>
+                    <span class="row-title">Xiaomi 2407FRK8EC</span>
+                  </div>
+                  <span style="font-size:10.5px;color:var(--accent-green);">USB · 投屏中</span>
+                </div>
+                <div class="row-sub">
+                  <span class="mono-num">1220×2712</span>
+                  <span>Android 16</span>
+                </div>
+              </div>
+              <div class="sidebar-row">
+                <div class="row-top">
+                  <div class="row-title-wrap">
+                    <span class="dot dot-green"></span>
+                    <span class="row-title">OPPO Find X7</span>
+                  </div>
+                  <span style="font-size:10.5px;color:var(--accent-blue);">Wi-Fi · 就绪</span>
+                </div>
+                <div class="row-sub">
+                  <span class="mono-num">192.168.1.42:37891</span>
+                  <span>Android 14</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 新增：虚拟模拟器侧栏快速入口 -->
+            <div class="section-header">
+              <span>模拟器 AVD (<span class="mono-num">2</span>)</span>
+              <button class="mini-link-btn" onclick="openModal('create')">+ 新建</button>
+            </div>
+            <div class="device-list">
+              <div class="sidebar-row" onclick="openModal('list')">
+                <div class="row-top">
+                  <div class="row-title-wrap">
+                    <span class="dot dot-green"></span>
+                    <span class="row-title">Pixel_7_API_34</span>
+                  </div>
+                  <span style="font-size:10.5px;color:var(--accent-green);">运行中</span>
+                </div>
+                <div class="row-sub">
+                  <span class="mono-num">emulator-5554</span>
+                  <span class="mono-num">4.3 GB</span>
+                </div>
+              </div>
+
+              <div class="sidebar-row" onclick="openModal('list')">
+                <div class="row-top">
+                  <div class="row-title-wrap">
+                    <span class="dot dot-gray"></span>
+                    <span class="row-title">Test_Clean_27</span>
+                  </div>
+                  <span style="font-size:10.5px;color:var(--text-tertiary);">已关机</span>
+                </div>
+                <div class="row-sub">
+                  <span class="mono-num">1080×2400</span>
+                  <span class="mono-num">2.9 GB</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="adb-footer">
+            <div style="display:flex;align-items:center;gap:7px;">
+              <span class="dot dot-green"></span>
+              <div>
+                <div style="font-weight:500;">Android SDK ADB</div>
+                <div class="mono-num" style="font-size:10px;color:var(--text-tertiary);">v37.0.0 · 5037</div>
+              </div>
+            </div>
+            <span style="color:var(--text-tertiary);font-size:12px;">↻</span>
+          </div>
+        </aside>
+
+        <!-- 右侧设备墙 -->
+        <main class="content-canvas">
+          <div class="wall-grid">
+            <div class="device-card">
+              <div class="card-header">
+                <span style="font-size:12.5px;font-weight:600;">Xiaomi 2407FRK8EC</span>
+                <span class="mono-num" style="font-size:10.5px;color:var(--text-tertiary);">60fps</span>
+              </div>
+              <div class="card-well">
+                <div class="card-screen">
+                  <div>真机实时画面</div>
+                  <div class="mono-num" style="opacity:.6;font-size:10.5px;">USB · 1220×2712</div>
+                </div>
+              </div>
+              <div class="card-footer">
+                <span>◀ &nbsp; ○ &nbsp; □</span>
+                <span>↻ &nbsp; ⏻ &nbsp; 📷</span>
+              </div>
+            </div>
+
+            <div class="device-card">
+              <div class="card-header">
+                <span style="font-size:12.5px;font-weight:600;">Pixel_7_API_34</span>
+                <span class="mono-num" style="font-size:10.5px;color:var(--text-tertiary);">60fps</span>
+              </div>
+              <div class="card-well">
+                <div class="card-screen">
+                  <span class="emu-pill">AVD 无头运行中</span>
+                  <div>模拟器实时画面</div>
+                  <div class="mono-num" style="opacity:.6;font-size:10.5px;">emulator-5554</div>
+                </div>
+              </div>
+              <div class="card-footer">
+                <span>◀ &nbsp; ○ &nbsp; □</span>
+                <span>↻ &nbsp; ⏻ &nbsp; 📷</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Liquid Glass 模拟器管理模态框 -->
+          <div id="emu-modal" class="modal-backdrop">
+            <div class="glass-modal" role="dialog" aria-label="模拟器管理中心">
+              <div class="modal-header">
+                <div class="modal-title-group">
+                  <div class="modal-icon">AVD</div>
+                  <div>
+                    <div class="modal-title">模拟器管理中心</div>
+                    <div class="modal-subtitle">创建、后台无头启动、清空数据及彻底释放磁盘空间</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div class="segmented">
+                    <button id="tab-list" class="seg-btn active" onclick="switchTab('list')">已创建 (2)</button>
+                    <button id="tab-create" class="seg-btn" onclick="switchTab('create')">+ 新建模拟器</button>
+                  </div>
+                  <button class="tb-btn" onclick="closeModal()" title="关闭">✕</button>
+                </div>
+              </div>
+
+              <!-- Tab 1: 已创建列表 -->
+              <div id="panel-list" class="modal-body">
+                <div class="env-banner">
+                  <div class="env-chips">
+                    <span class="chip ok">● avdmanager 就绪</span>
+                    <span class="chip warn">▲ emulator 未安装（需补装 SDK Emulator）</span>
+                    <span class="chip">已装镜像：API 34 (x86_64) · API 27</span>
+                  </div>
+                  <div class="mono-num" style="color:var(--text-secondary);white-space:nowrap;">
+                    总占用：<strong style="color:var(--text-primary);">7.2 GB</strong>
+                  </div>
+                </div>
+
+                <!-- 彻底删除二次确认条 -->
+                <div id="delete-confirm" class="confirm-box hidden">
+                  <div class="confirm-text">
+                    确定要彻底删除 <strong id="del-name">Test_Clean_27</strong> 吗？<br />
+                    将永久移除 <span class="mono-num">~/.android/avd/Test_Clean_27.avd</span> 及配置文件，立即释放 <strong id="del-size">2.9 GB</strong> 磁盘空间（不可恢复）。
+                  </div>
+                  <div style="display:flex;gap:8px;flex-shrink:0;">
+                    <button class="btn" onclick="hideDeleteConfirm()">取消</button>
+                    <button class="btn btn-danger" onclick="confirmDelete()">确认彻底删除</button>
+                  </div>
+                </div>
+
+                <div id="avd-list" class="avd-list">
+                  <div class="avd-item" data-avd="Pixel_7_API_34">
+                    <div class="avd-meta">
+                      <div class="avd-name-row">
+                        <span class="avd-name">Pixel_7_API_34</span>
+                        <span class="badge badge-running">运行中 · emulator-5554</span>
+                      </div>
+                      <div class="avd-specs">
+                        <span>Android 14 (API 34 · x86_64)</span>
+                        <span class="mono-num">1080×2400 · 420dpi</span>
+                        <span class="disk-tag mono-num">磁盘占用 4.3 GB</span>
+                      </div>
+                    </div>
+                    <div class="avd-actions">
+                      <button class="btn">停止实例</button>
+                      <button class="btn btn-danger" onclick="showDeleteConfirm('Pixel_7_API_34', '4.3 GB')">彻底删除</button>
+                    </div>
+                  </div>
+
+                  <div class="avd-item" data-avd="Test_Clean_27">
+                    <div class="avd-meta">
+                      <div class="avd-name-row">
+                        <span class="avd-name">Test_Clean_27</span>
+                        <span class="badge badge-stopped">已关机</span>
+                      </div>
+                      <div class="avd-specs">
+                        <span>Android 8.1 (API 27 · x86)</span>
+                        <span class="mono-num">1080×1920 · 420dpi</span>
+                        <span class="disk-tag mono-num">磁盘占用 2.9 GB</span>
+                      </div>
+                    </div>
+                    <div class="avd-actions">
+                      <button class="btn btn-primary">▶ 后台启动</button>
+                      <button class="btn" title="仅清空应用与用户数据，保留空白系统">重置数据</button>
+                      <button class="btn btn-danger" onclick="showDeleteConfirm('Test_Clean_27', '2.9 GB')">彻底删除</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab 2: 新建模拟器 -->
+              <div id="panel-create" class="modal-body hidden">
+                <div class="form-grid">
+                  <div class="field">
+                    <label>模拟器名称（仅限英文、数字、下划线）</label>
+                    <input class="input mono-num" value="Pixel_8_Test" />
+                  </div>
+
+                  <div class="field">
+                    <label>系统镜像（自动扫描本地 SDK system-images）</label>
+                    <select class="select">
+                      <option>Android 14 (API 34) · google_apis · x86_64</option>
+                      <option>Android 8.1 (API 27) · google_apis_playstore · x86</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label>设备模板</label>
+                    <select class="select">
+                      <option>Pixel 7 (1080×2400 · 420dpi)</option>
+                      <option>通用手机 (1080×1920 · 420dpi)</option>
+                      <option>Android 平板 (1600×2560 · 320dpi)</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label>启动模式偏好</label>
+                    <select class="select">
+                      <option>无头模式 (-no-window，画面直接进 DroidWall)</option>
+                      <option>标准模式（同时显示原生模拟器窗口）</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label>内存配额 (RAM)</label>
+                    <select class="select">
+                      <option>2048 MB（轻量多开推荐）</option>
+                      <option selected>4096 MB（流畅标准）</option>
+                      <option>6144 MB</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label>内部存储上限 (Data Partition)</label>
+                    <select class="select">
+                      <option>4 GB（测试够用，节省磁盘）</option>
+                      <option selected>8 GB（推荐）</option>
+                      <option>16 GB</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-footer">
+                  <span>存储位置：<span class="mono-num">~/.android/avd/Pixel_8_Test.avd</span>（随用随删不留残留）</span>
+                  <div style="display:flex;gap:8px;">
+                    <button class="btn" onclick="switchTab('list')">返回列表</button>
+                    <button class="btn btn-primary" onclick="switchTab('list')">创建并立即启动</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Liquid Glass 无线 ADB 自动发现模态框 -->
+          <div id="wifi-modal" class="modal-backdrop hidden">
+            <div class="glass-modal" role="dialog" aria-label="无线 ADB 自动发现">
+              <div class="modal-header">
+                <div class="modal-title-group">
+                  <div class="modal-icon">WiFi</div>
+                  <div>
+                    <div class="modal-title">无线 ADB 自动发现与多设备连接</div>
+                    <div class="modal-subtitle">自动扫描局域网 mDNS 无线调试设备，支持配对码配对与 USB 一键转无线</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <button class="btn">↻ 重新扫描</button>
+                  <button class="tb-btn" onclick="closeWifiModal()" title="关闭">✕</button>
+                </div>
+              </div>
+
+              <div class="modal-body">
+                <div class="env-banner">
+                  <div class="env-chips">
+                    <span class="chip ok">● mDNS 自动发现运行中 (_adb-tls-connect._tcp)</span>
+                    <span class="chip">局域网发现 2 台无线设备</span>
+                  </div>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-secondary);cursor:pointer;">
+                    <input type="checkbox" checked /> 发现已配对设备时自动连接
+                  </label>
+                </div>
+
+                <!-- 手动输入 IP:Port 直连 -->
+                <div style="display:flex;gap:8px;">
+                  <input class="input mono-num" style="flex:1;" placeholder="输入设备 IP:端口（如 192.168.1.88:5555）" />
+                  <button class="btn btn-primary">连接设备</button>
+                </div>
+
+                <div class="avd-list">
+                  <div class="avd-item">
+                    <div class="avd-meta">
+                      <div class="avd-name-row">
+                        <span class="avd-name">OPPO Find X7</span>
+                        <span class="badge badge-running">已连接 · 可直接投屏</span>
+                      </div>
+                      <div class="avd-specs">
+                        <span class="mono-num">192.168.1.42:37891</span>
+                        <span>Android 14 · mDNS 自动发现</span>
+                      </div>
+                    </div>
+                    <div class="avd-actions">
+                      <button class="btn btn-danger">断开</button>
+                    </div>
+                  </div>
+
+                  <div class="avd-item">
+                    <div class="avd-meta">
+                      <div class="avd-name-row">
+                        <span class="avd-name">Redmi K70 (待配对)</span>
+                        <span class="badge badge-stopped" style="color:var(--accent-amber);background:rgba(255,159,10,.14);">发现配对广播</span>
+                      </div>
+                      <div class="avd-specs">
+                        <span class="mono-num">192.168.1.65:41203</span>
+                        <span>_adb-tls-pairing._tcp · 需输入 6 位配对码</span>
+                      </div>
+                    </div>
+                    <div class="avd-actions">
+                      <input class="input mono-num" style="width:110px;padding:5px 8px;" placeholder="6位配对码" />
+                      <button class="btn btn-primary">配对并连接</button>
+                    </div>
+                  </div>
+
+                  <div class="avd-item">
+                    <div class="avd-meta">
+                      <div class="avd-name-row">
+                        <span class="avd-name">Xiaomi 2407FRK8EC</span>
+                        <span class="badge badge-stopped">当前通过 USB 连接</span>
+                      </div>
+                      <div class="avd-specs">
+                        <span class="mono-num">8XL7JZFY8L4XAIBU · 192.168.1.25</span>
+                        <span>支持转为 TCP/IP 5555 无线模式</span>
+                      </div>
+                    </div>
+                    <div class="avd-actions">
+                      <button class="btn">转为无线连接</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const root = document.documentElement;
+      const cur = root.getAttribute('data-theme') || 'dark';
+      root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+    }
+    function openModal(tab) {
+      closeWifiModal();
+      document.getElementById('emu-modal').classList.remove('hidden');
+      switchTab(tab || 'list');
+    }
+    function closeModal() {
+      document.getElementById('emu-modal').classList.add('hidden');
+    }
+    function openWifiModal() {
+      closeModal();
+      document.getElementById('wifi-modal').classList.remove('hidden');
+    }
+    function closeWifiModal() {
+      document.getElementById('wifi-modal').classList.add('hidden');
+    }
+    function switchTab(tab) {
+      const isList = tab === 'list';
+      document.getElementById('panel-list').classList.toggle('hidden', !isList);
+      document.getElementById('panel-create').classList.toggle('hidden', isList);
+      document.getElementById('tab-list').classList.toggle('active', isList);
+      document.getElementById('tab-create').classList.toggle('active', !isList);
+    }
+    function showDeleteConfirm(name, size) {
+      document.getElementById('del-name').textContent = name;
+      document.getElementById('del-size').textContent = size;
+      document.getElementById('delete-confirm').classList.remove('hidden');
+    }
+    function hideDeleteConfirm() {
+      document.getElementById('delete-confirm').classList.add('hidden');
+    }
+    function confirmDelete() {
+      const name = document.getElementById('del-name').textContent;
+      const row = document.querySelector(`[data-avd="${name}"]`);
+      if (row) row.remove();
+      hideDeleteConfirm();
+    }
+  </script>
+</body>
+</html>
