@@ -45,6 +45,47 @@ export async function removeForward(adbPath: string, serial: string, localPort: 
   }
 }
 
+export async function installApk(
+  adbPath: string,
+  serial: string,
+  apkPath: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { stdout, stderr } = await execAdb(adbPath, ['-s', serial, 'install', '-r', '-d', apkPath], 120000)
+    const combined = `${stdout}\n${stderr}`.trim()
+    if (/\bSuccess\b/i.test(combined)) {
+      return { ok: true }
+    }
+    const failMatch = combined.match(/Failure\s*\[([^\]]+)\]/i)
+    return {
+      ok: false,
+      error: failMatch ? failMatch[1] : combined || 'adb install 未返回 Success'
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    const failMatch = msg.match(/Failure\s*\[([^\]]+)\]/i)
+    return { ok: false, error: failMatch ? failMatch[1] : msg }
+  }
+}
+
+export async function pushToDownload(
+  adbPath: string,
+  serial: string,
+  localPath: string
+): Promise<{ ok: boolean; remotePath: string; error?: string }> {
+  const remotePath = `/sdcard/Download/${path.basename(localPath)}`
+  try {
+    await execAdb(adbPath, ['-s', serial, 'push', localPath, remotePath], 120000)
+    return { ok: true, remotePath }
+  } catch (err) {
+    return {
+      ok: false,
+      remotePath,
+      error: err instanceof Error ? err.message : String(err)
+    }
+  }
+}
+
 export function captureScreenshot(
   adbPath: string,
   serial: string,

@@ -10,9 +10,10 @@ import {
   Power,
   RotateCw,
   ShieldAlert,
-  Square
+  Square,
+  Upload
 } from 'lucide-react'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useMirrorStream } from '../hooks/useMirrorStream'
 import { useNormalizedControl } from '../hooks/useNormalizedControl'
 import { useDeviceStore } from '../store/useDeviceStore'
@@ -25,12 +26,16 @@ interface DeviceCardProps {
 
 export function DeviceCard({ device, focused }: DeviceCardProps) {
   const mirrorState = useDeviceStore((s) => s.mirrorStates[device.serial])
+  const syncControlEnabled = useDeviceStore((s) => s.syncControlEnabled)
+  const isTransferring = useDeviceStore((s) => Boolean(s.transferringSerials[device.serial]))
   const startMirror = useDeviceStore((s) => s.startMirror)
   const stopMirror = useDeviceStore((s) => s.stopMirror)
   const toggleFocus = useDeviceStore((s) => s.toggleFocus)
   const takeScreenshot = useDeviceStore((s) => s.takeScreenshot)
+  const dropFilesToDevices = useDeviceStore((s) => s.dropFilesToDevices)
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
   const status = mirrorState?.status ?? 'idle'
 
   const { videoSize, wsConnected, liveState, sendControl } = useMirrorStream(device.serial, status, canvasRef)
@@ -78,11 +83,43 @@ export function DeviceCard({ device, focused }: DeviceCardProps) {
     ? 'bg-[var(--accent-blue)] animate-pulse'
     : 'bg-[var(--text-tertiary)]'
 
+  const handleDragOver = (e: React.DragEvent<HTMLElement>): void => {
+    if (device.state !== 'device') return
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'copy'
+    if (!isDragOver) setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLElement>): void => {
+    e.stopPropagation()
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setIsDragOver(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLElement>): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+    if (device.state !== 'device') return
+    const filePaths = Array.from(e.dataTransfer.files)
+      .map((f) => window.droidWall.getPathForFile(f))
+      .filter(Boolean)
+    if (filePaths.length > 0) {
+      void dropFilesToDevices([device.serial], filePaths)
+    }
+  }
+
   return (
     <article
-      className={`device-card mx-auto w-full overflow-hidden flex flex-col ${
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`device-card relative mx-auto w-full overflow-hidden flex flex-col transition-shadow ${
         !focused && isLandscape ? 'sm:col-span-2' : ''
-      }`}
+      } ${isDragOver ? 'ring-2 ring-[var(--accent-blue)]' : ''}`}
       style={{ maxWidth: cardMaxWidth }}
     >
       {/* 卡片顶栏 */}
@@ -96,6 +133,11 @@ export function DeviceCard({ device, focused }: DeviceCardProps) {
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          {isRunning && syncControlEnabled && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--accent-blue)]/15 text-[var(--accent-blue)] mr-0.5">
+              同步
+            </span>
+          )}
           {isRunning && (
             <span className="mono-num text-[10.5px] text-[var(--text-tertiary)] mr-1">
               {effectiveState?.fps ?? 0}fps
@@ -203,6 +245,24 @@ export function DeviceCard({ device, focused }: DeviceCardProps) {
           {isRunning && effectiveState?.warning && (
             <div className="absolute inset-x-3 bottom-3 px-2.5 py-2 rounded-xl bg-black/80 border border-[var(--accent-amber)]/50 text-[11px] text-amber-200 leading-snug pointer-events-none">
               {effectiveState.warning}
+            </div>
+          )}
+
+          {/* 拖拽安装 / 文件推送引导遮罩 */}
+          {(isDragOver || isTransferring) && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-black/65 backdrop-blur-md rounded-[14px] gap-2 pointer-events-none">
+              {isTransferring ? (
+                <>
+                  <Loader2 className="w-6 h-6 text-[var(--accent-blue)] animate-spin" strokeWidth={1.7} aria-hidden="true" />
+                  <div className="text-[12px] font-medium text-white">正在安装 / 传输文件...</div>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-6 h-6 text-[var(--accent-blue)]" strokeWidth={1.7} aria-hidden="true" />
+                  <div className="text-[12px] font-medium text-white">释放以安装 APK 或推送文件</div>
+                  <div className="text-[10.5px] text-white/65">普通文件将保存至 /sdcard/Download</div>
+                </>
+              )}
             </div>
           )}
         </div>

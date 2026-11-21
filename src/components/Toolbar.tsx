@@ -1,4 +1,4 @@
-import { Moon, PanelLeft, Sun } from 'lucide-react'
+import { Cpu, Link2, Moon, PanelLeft, Sun, Upload, Wifi } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useDeviceStore } from '../store/useDeviceStore'
 import type { GridCols, QualityPreset } from '../types/droidwall'
@@ -23,10 +23,30 @@ export function Toolbar() {
   const quality = useDeviceStore((s) => s.quality)
   const gridCols = useDeviceStore((s) => s.gridCols)
   const colorScheme = useDeviceStore((s) => s.colorScheme)
+  const syncControlEnabled = useDeviceStore((s) => s.syncControlEnabled)
+  const devices = useDeviceStore((s) => s.devices)
+  const focusedSerial = useDeviceStore((s) => s.focusedSerial)
+  const wirelessState = useDeviceStore((s) => s.wirelessState)
+  const avds = useDeviceStore((s) => s.avds)
+  const activeModal = useDeviceStore((s) => s.activeModal)
   const toggleSidebar = useDeviceStore((s) => s.toggleSidebar)
   const setQuality = useDeviceStore((s) => s.setQuality)
   const setGridCols = useDeviceStore((s) => s.setGridCols)
+  const toggleSyncControl = useDeviceStore((s) => s.toggleSyncControl)
+  const pickAndDropFiles = useDeviceStore((s) => s.pickAndDropFiles)
+  const dropFilesToDevices = useDeviceStore((s) => s.dropFilesToDevices)
+  const setActiveModal = useDeviceStore((s) => s.setActiveModal)
   const toggleColorScheme = useDeviceStore((s) => s.toggleColorScheme)
+
+  const onlineSerials = devices.filter((d) => d.state === 'device').map((d) => d.serial)
+  const dropTargets = focusedSerial && onlineSerials.includes(focusedSerial) ? [focusedSerial] : onlineSerials
+  const connectedWifiDevices = devices.filter((d) => /^\d+\.\d+\.\d+\.\d+:\d+$/.test(d.serial))
+  const connectedWifiIps = new Set(connectedWifiDevices.map((d) => d.serial.split(':')[0]))
+  const wirelessCount =
+    connectedWifiDevices.length +
+    wirelessState.services.filter(
+      (s) => !s.alreadyConnected && !(s.serviceType === 'connect' && connectedWifiIps.has(s.ip))
+    ).length
 
   const toolbarRef = useRef<HTMLDivElement>(null)
   const [isDark, setIsDark] = useState(getResolvedDark)
@@ -147,6 +167,83 @@ export function Toolbar() {
             </button>
           ))}
         </div>
+
+        <span role="separator" aria-orientation="vertical" className="tb-sep" />
+
+        <button
+          type="button"
+          onClick={() => void toggleSyncControl()}
+          aria-pressed={syncControlEnabled}
+          aria-label="一控多群控同步"
+          title={
+            syncControlEnabled
+              ? '群控同步已开启：在任意投屏设备上操作将同步至全部运行中设备'
+              : '开启群控同步（一控多）'
+          }
+          className={`tb-btn inline-flex items-center gap-1 ${
+            syncControlEnabled ? 'text-[var(--accent-blue)]' : ''
+          }`}
+        >
+          <Link2 className="w-3.5 h-3.5" strokeWidth={1.7} aria-hidden="true" />
+          <span>群控</span>
+        </button>
+
+        <button
+          type="button"
+          aria-disabled={dropTargets.length === 0 ? 'true' : undefined}
+          onClick={() => void pickAndDropFiles()}
+          onDragOver={(e) => {
+            if (dropTargets.length === 0 || !e.dataTransfer.types.includes('Files')) return
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'copy'
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            if (dropTargets.length === 0) return
+            const paths = Array.from(e.dataTransfer.files)
+              .map((f) => window.droidWall.getPathForFile(f))
+              .filter(Boolean)
+            if (paths.length > 0) {
+              void dropFilesToDevices(dropTargets, paths)
+            }
+          }}
+          aria-label="安装 APK 或推送文件"
+          title={
+            dropTargets.length === 0
+              ? '暂无在线设备'
+              : focusedSerial
+              ? '点击选择或拖入文件，安装/推送到当前专注设备'
+              : `点击选择或拖入文件，批量安装/推送到全部 ${dropTargets.length} 台在线设备`
+          }
+          className="tb-btn inline-flex items-center gap-1"
+        >
+          <Upload className="w-3.5 h-3.5" strokeWidth={1.7} aria-hidden="true" />
+          <span>分发</span>
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={activeModal === 'wireless'}
+          onClick={() => setActiveModal(activeModal === 'wireless' ? 'none' : 'wireless')}
+          aria-label="无线 ADB 自动发现"
+          title="无线 ADB 自动发现与多设备连接"
+          className="tb-btn inline-flex items-center gap-1"
+        >
+          <Wifi className="w-3.5 h-3.5" strokeWidth={1.7} aria-hidden="true" />
+          <span>无线{wirelessCount > 0 ? ` (${wirelessCount})` : ''}</span>
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={activeModal === 'emulator'}
+          onClick={() => setActiveModal(activeModal === 'emulator' ? 'none' : 'emulator', 'list')}
+          aria-label="模拟器管理"
+          title="创建、启动与彻底删除 Android 模拟器"
+          className="tb-btn inline-flex items-center gap-1"
+        >
+          <Cpu className="w-3.5 h-3.5" strokeWidth={1.7} aria-hidden="true" />
+          <span>模拟器{avds.length > 0 ? ` (${avds.length})` : ''}</span>
+        </button>
 
         <span role="separator" aria-orientation="vertical" className="tb-sep" />
 

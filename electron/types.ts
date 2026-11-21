@@ -54,3 +54,80 @@ export interface ScreenshotResult {
   filePath?: string
   error?: string
 }
+
+export interface FileDropItemResult {
+  serial: string
+  fileName: string
+  kind: 'apk' | 'file'
+  ok: boolean
+  remotePath?: string
+  error?: string
+}
+
+export interface FileDropBatchResult {
+  ok: boolean
+  results: FileDropItemResult[]
+  error?: string
+}
+
+export interface EmulatorSystemImage {
+  id: string
+  apiLevel: number
+  tag: string
+  abi: string
+  label: string
+}
+
+export interface AvdInfo {
+  name: string
+  target: string
+  abi: string
+  resolution: string
+  path: string
+  sizeBytes: number
+  runningSerial?: string
+  status: 'running' | 'stopped'
+}
+
+export interface EmulatorEnvStatus {
+  sdkRoot: string | null
+  emulatorPath: string | null
+  avdmanagerPath: string | null
+  systemImages: EmulatorSystemImage[]
+  totalAvdBytes: number
+}
+
+export type DeviceTemplateId = 'pixel_7' | 'phone_1080' | 'tablet'
+
+export interface CreateAvdRequest {
+  name: string
+  systemImageId: string
+  deviceTemplate: DeviceTemplateId
+  ramMb: number
+  dataPartitionGb: number
+  headless: boolean
+  startAfterCreate: boolean
+}
+
+export interface ActionResult {
+  ok: boolean
+  message?: string
+  error?: string
+}
+
+export interface MdnsAdbService {
+  instanceName: string
+  serviceType: 'connect' | 'pairing'
+  ip: string
+  port: number
+  address: string
+  alreadyConnected: boolean
+}
+
+export interface WirelessDiscoveryState {
+  supported: boolean
+  scanning: boolean
+  autoConnect: boolean
+  services: MdnsAdbService[]
+  lastError?: string
+}

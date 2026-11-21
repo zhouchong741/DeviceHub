@@ -37,19 +37,46 @@ export function useNormalizedControl(
   const lastRatioRef = useRef<{ xRatio: number; yRatio: number }>({ xRatio: 0, yRatio: 0 })
   const lastMoveTimeRef = useRef(0)
 
-  // 屏蔽镜像画面内的鼠标滚轮与触摸板双指滑动，防止与设备内触控拖拽及外层列表滚动冲突
+  const lastWheelTimeRef = useRef(0)
+
+  // 将画布内的鼠标滚轮与触控板双指滑动转发为 scrcpy 滚动事件，同时阻止外层列表滚动
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
-    const blockWheel = (e: WheelEvent): void => {
+    const onWheel = (e: WheelEvent): void => {
       e.preventDefault()
       e.stopPropagation()
+      if (!enabled) return
+
+      const now = performance.now()
+      if (now - lastWheelTimeRef.current < 16) return
+      lastWheelTimeRef.current = now
+
+      const clampScroll = (delta: number): number => {
+        if (Math.abs(delta) < 0.5) return 0
+        const scaled = -delta / 24
+        const rounded = scaled > 0 ? Math.ceil(scaled) : Math.floor(scaled)
+        return Math.max(-16, Math.min(16, rounded))
+      }
+
+      const hScroll = clampScroll(e.deltaX)
+      const vScroll = clampScroll(e.deltaY)
+      if (hScroll === 0 && vScroll === 0) return
+
+      const ratio = getRatio(e, el)
+      sendControl({
+        type: 'scroll',
+        xRatio: ratio.xRatio,
+        yRatio: ratio.yRatio,
+        hScroll,
+        vScroll
+      })
     }
-    el.addEventListener('wheel', blockWheel, { passive: false })
+    el.addEventListener('wheel', onWheel, { passive: false })
     return () => {
-      el.removeEventListener('wheel', blockWheel)
+      el.removeEventListener('wheel', onWheel)
     }
-  }, [canvasRef])
+  }, [canvasRef, enabled, sendControl])
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {

@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import { DeviceWall } from './components/DeviceWall'
+import { EmulatorModal } from './components/EmulatorModal'
 import { Sidebar } from './components/Sidebar'
 import { Toast } from './components/Toast'
 import { Toolbar } from './components/Toolbar'
+import { WirelessModal } from './components/WirelessModal'
 import { useDeviceStore } from './store/useDeviceStore'
 
 export function App() {
@@ -34,6 +36,8 @@ export function App() {
         >
           <Toast />
           <DeviceWall />
+          <WirelessModal />
+          <EmulatorModal />
 
           <p role="status" className="sr-only">
             {hudMessage}
